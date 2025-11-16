@@ -1,0 +1,26 @@
+# Build artifacts
+build/
+*.o
+*.a
+*.so
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Dataset outputs
+*.log
+*.csv
+dataset/
+
+# Temporary files
+tmp/
+temp/
