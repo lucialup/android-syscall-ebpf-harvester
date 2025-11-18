@@ -10,12 +10,21 @@
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
 
+#define SYSCALL_OPEN    1
+#define SYSCALL_OPENAT  2
+#define SYSCALL_CLOSE   3
+
+// Number of BPF programs to attach: openat, openat_ret, open, open_ret, close
+#define NUM_BPF_PROGRAMS 5
+
 struct open_event {
 	__u32 pid;
+	__u32 syscall_type;
 	__u64 ts;
 	long flags;
+	int fd;
 	char filename[256];
-};
+} __attribute__((packed));
 
 static volatile bool exiting = false;
 
@@ -56,12 +65,27 @@ static void print_timestamp(__u64 ts)
 
 static void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 {
-	const struct open_event *e = data;
+	if (data_sz == sizeof(struct open_event)) {
+		const struct open_event *e = data;
+		const char *syscall_name;
 
-	print_timestamp(e->ts);
-	printf("pid=%u ", e->pid);
-	print_flags(e->flags);
-	printf("filename=\"%s\"\n", e->filename);
+		if (e->syscall_type == SYSCALL_CLOSE) {
+			syscall_name = "close";
+		} else if (e->syscall_type == SYSCALL_OPEN) {
+			syscall_name = "open";
+		} else {
+			syscall_name = "openat";
+		}
+
+		print_timestamp(e->ts);
+		if (e->syscall_type == SYSCALL_CLOSE) {
+			printf("syscall=%s pid=%u path=\"%s\" fd=%d\n",
+				   syscall_name, e->pid, e->filename, e->fd);
+		} else {
+			printf("syscall=%s pid=%u path=\"%s\" fd=%d flags=0x%lx\n",
+				   syscall_name, e->pid, e->filename, e->fd, e->flags);
+		}
+	}
 }
 
 static void handle_lost_events(void *ctx, int cpu, __u64 lost_cnt)
@@ -72,7 +96,7 @@ static void handle_lost_events(void *ctx, int cpu, __u64 lost_cnt)
 int main(int argc, char **argv)
 {
 	struct bpf_object *obj = NULL;
-	struct bpf_link *links[2] = {};
+	struct bpf_link *links[NUM_BPF_PROGRAMS] = {};
 	struct perf_buffer *pb = NULL;
 	struct bpf_program *prog;
 	int map_fd, filter_map_fd, err = 0, i = 0;
@@ -145,16 +169,19 @@ int main(int argc, char **argv)
 	}
 
 	bpf_object__for_each_program(prog, obj) {
+		const char *prog_name = bpf_program__name(prog);
+		fprintf(stderr, "Attaching program: %s\n", prog_name);
 		links[i] = bpf_program__attach(prog);
 		if (libbpf_get_error(links[i])) {
-			fprintf(stderr, "ERROR: bpf_program__attach failed\n");
+			fprintf(stderr, "ERROR: bpf_program__attach failed for %s\n", prog_name);
 			links[i] = NULL;
 			goto cleanup;
 		}
+		fprintf(stderr, "  -> Successfully attached %s\n", prog_name);
 		i++;
 	}
 
-	fprintf(stderr, "Successfully attached BPF programs\n");
+	fprintf(stderr, "Successfully attached %d BPF programs\n", i);
 
 	map_fd = bpf_object__find_map_fd_by_name(obj, "events");
 	if (map_fd < 0) {
@@ -174,7 +201,7 @@ int main(int argc, char **argv)
 	signal(SIGINT, sig_handler);
 	signal(SIGTERM, sig_handler);
 
-	printf("Tracing open() syscalls with active filters\n");
+	printf("Tracing open/openat/close syscalls with active filters\n");
 	printf("Filtered out: /etc/localtime, /proc/*, /sys/*, /dev/urandom, PID %u\n", my_pid);
 	printf("=======================================================================\n");
 	printf("%-20s %-8s %-30s %s\n", "TIMESTAMP", "PID", "FLAGS", "FILENAME");
@@ -192,7 +219,7 @@ int main(int argc, char **argv)
 cleanup:
 	printf("\nDetaching and cleaning up...\n");
 	perf_buffer__free(pb);
-	for (i = 0; i < 2; i++)
+	for (i = 0; i < NUM_BPF_PROGRAMS; i++)
 		bpf_link__destroy(links[i]);
 	bpf_object__close(obj);
 
