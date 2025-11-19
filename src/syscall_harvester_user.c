@@ -13,9 +13,10 @@
 #define SYSCALL_OPEN    1
 #define SYSCALL_OPENAT  2
 #define SYSCALL_CLOSE   3
+#define SYSCALL_READ    4
 
-// Number of BPF programs to attach: openat, openat_ret, open, open_ret, close
-#define NUM_BPF_PROGRAMS 5
+// Number of BPF programs: openat, openat_ret, open, open_ret, close, read, read_ret
+#define NUM_BPF_PROGRAMS 7
 
 struct open_event {
 	__u32 pid;
@@ -23,6 +24,7 @@ struct open_event {
 	__u64 ts;
 	long flags;
 	int fd;
+	long actual_count;
 	char filename[256];
 } __attribute__((packed));
 
@@ -73,14 +75,21 @@ static void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 			syscall_name = "close";
 		} else if (e->syscall_type == SYSCALL_OPEN) {
 			syscall_name = "open";
-		} else {
+		} else if (e->syscall_type == SYSCALL_OPENAT) {
 			syscall_name = "openat";
+		} else if (e->syscall_type == SYSCALL_READ) {
+			syscall_name = "read";
+		} else {
+			syscall_name = "unknown";
 		}
 
 		print_timestamp(e->ts);
 		if (e->syscall_type == SYSCALL_CLOSE) {
 			printf("syscall=%s pid=%u path=\"%s\" fd=%d\n",
 				   syscall_name, e->pid, e->filename, e->fd);
+		} else if (e->syscall_type == SYSCALL_READ) {
+			printf("syscall=%s pid=%u path=\"%s\" fd=%d count=%ld actual=%ld\n",
+				   syscall_name, e->pid, e->filename, e->fd, e->flags, e->actual_count);
 		} else {
 			printf("syscall=%s pid=%u path=\"%s\" fd=%d flags=0x%lx\n",
 				   syscall_name, e->pid, e->filename, e->fd, e->flags);
@@ -201,10 +210,10 @@ int main(int argc, char **argv)
 	signal(SIGINT, sig_handler);
 	signal(SIGTERM, sig_handler);
 
-	printf("Tracing open/openat/close syscalls with active filters\n");
+	printf("Tracing open/openat/close/read syscalls with active filters\n");
 	printf("Filtered out: /etc/localtime, /proc/*, /sys/*, /dev/urandom, PID %u\n", my_pid);
 	printf("=======================================================================\n");
-	printf("%-20s %-8s %-30s %s\n", "TIMESTAMP", "PID", "FLAGS", "FILENAME");
+	printf("%-20s %-8s %-30s %s\n", "TIMESTAMP", "PID", "SYSCALL/PARAMS", "FILENAME");
 	printf("-----------------------------------------------------------------------\n");
 
 	while (!exiting) {
