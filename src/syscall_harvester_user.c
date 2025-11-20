@@ -14,9 +14,10 @@
 #define SYSCALL_OPENAT  2
 #define SYSCALL_CLOSE   3
 #define SYSCALL_READ    4
+#define SYSCALL_WRITE   5
 
-// Number of BPF programs: openat, openat_ret, open, open_ret, close, read, read_ret
-#define NUM_BPF_PROGRAMS 7
+// Number of BPF programs: openat, openat_ret, open, open_ret, close, read, read_ret, write, write_ret
+#define NUM_BPF_PROGRAMS 9
 
 struct open_event {
 	__u32 pid;
@@ -79,6 +80,8 @@ static void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 			syscall_name = "openat";
 		} else if (e->syscall_type == SYSCALL_READ) {
 			syscall_name = "read";
+		} else if (e->syscall_type == SYSCALL_WRITE) {
+			syscall_name = "write";
 		} else {
 			syscall_name = "unknown";
 		}
@@ -87,7 +90,7 @@ static void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 		if (e->syscall_type == SYSCALL_CLOSE) {
 			printf("syscall=%s pid=%u path=\"%s\" fd=%d\n",
 				   syscall_name, e->pid, e->filename, e->fd);
-		} else if (e->syscall_type == SYSCALL_READ) {
+		} else if (e->syscall_type == SYSCALL_READ || e->syscall_type == SYSCALL_WRITE) {
 			printf("syscall=%s pid=%u path=\"%s\" fd=%d count=%ld actual=%ld\n",
 				   syscall_name, e->pid, e->filename, e->fd, e->flags, e->actual_count);
 		} else {
@@ -123,8 +126,8 @@ int main(int argc, char **argv)
 		.rlim_max = RLIM_INFINITY,
 	};
 	if (setrlimit(RLIMIT_MEMLOCK, &rlim_new)) {
-		fprintf(stderr, "Failed to increase RLIMIT_MEMLOCK limit!\n");
-		goto cleanup;
+		fprintf(stderr, "WARNING: Failed to increase RLIMIT_MEMLOCK limit (may need root privileges)\n");
+		fprintf(stderr, "Continuing anyway...\n");
 	}
 
 	my_pid = getpid();
@@ -210,7 +213,7 @@ int main(int argc, char **argv)
 	signal(SIGINT, sig_handler);
 	signal(SIGTERM, sig_handler);
 
-	printf("Tracing open/openat/close/read syscalls with active filters\n");
+	printf("Tracing open/openat/close/read/write syscalls with active filters\n");
 	printf("Filtered out: /etc/localtime, /proc/*, /sys/*, /dev/urandom, PID %u\n", my_pid);
 	printf("=======================================================================\n");
 	printf("%-20s %-8s %-30s %s\n", "TIMESTAMP", "PID", "SYSCALL/PARAMS", "FILENAME");

@@ -16,6 +16,7 @@ Create labeled datasets of syscall behavior from:
 
 - **open/openat** - File opens (path, flags, fd)
 - **read** - File reads (path, fd, bytes requested/actual)
+- **write** - File writes (path, fd, bytes requested/actual)
 - **close** - File closes (path, fd)
 
 ## Architecture
@@ -27,7 +28,7 @@ Create labeled datasets of syscall behavior from:
 ├─────────────────────────────────────────┤
 │          Linux Kernel                   │
 │                                         │
-│   open/read/close syscall hooks        │
+│   open/read/write/close syscall hooks  │
 │              ↓ kprobe                   │
 │   ┌─────────────────────────────────┐  │
 │   │  eBPF Program (kernel space)    │  │
@@ -93,18 +94,19 @@ cd /data/local/tmp/bpf
 ```
 ts=10:30:45.123456789 syscall=openat pid=5678 path="/data/app/config.db" fd=7 flags=0x0
 ts=10:30:45.123567890 syscall=read pid=5678 path="/data/app/config.db" fd=7 count=4096 actual=2048
-ts=10:30:45.123678901 syscall=close pid=5678 path="/data/app/config.db" fd=7
+ts=10:30:45.123678901 syscall=write pid=5678 path="/data/app/config.db" fd=7 count=512 actual=512
+ts=10:30:45.123789012 syscall=close pid=5678 path="/data/app/config.db" fd=7
 ```
 
 **Fields:**
 - `ts` - Timestamp (HH:MM:SS.nanoseconds)
-- `syscall` - Syscall name (open/openat/read/close)
+- `syscall` - Syscall name (open/openat/read/write/close)
 - `pid` - Process ID
 - `path` - File path (empty for unknown FDs)
 - `fd` - File descriptor number
 - `flags` - Open flags (open/openat only)
-- `count` - Bytes requested (read only)
-- `actual` - Bytes actually read (read only)
+- `count` - Bytes requested (read/write only)
+- `actual` - Bytes actually read/written (read/write only)
 
 ## Project Structure
 
