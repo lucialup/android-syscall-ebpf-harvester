@@ -92,16 +92,17 @@ cd /data/local/tmp/bpf
 ## Output Format
 
 ```
-ts=10:30:45.123456789 syscall=openat pid=5678 path="/data/app/config.db" fd=7 flags=0x0
-ts=10:30:45.123567890 syscall=read pid=5678 path="/data/app/config.db" fd=7 count=4096 actual=2048
-ts=10:30:45.123678901 syscall=write pid=5678 path="/data/app/config.db" fd=7 count=512 actual=512
-ts=10:30:45.123789012 syscall=close pid=5678 path="/data/app/config.db" fd=7
+ts=10:30:45.123456789 syscall=openat pid=5678 uid=10123 path="/data/app/config.db" fd=7 flags=0x0
+ts=10:30:45.123567890 syscall=read pid=5678 uid=10123 path="/data/app/config.db" fd=7 count=4096 actual=2048
+ts=10:30:45.123678901 syscall=write pid=5678 uid=10123 path="/data/app/config.db" fd=7 count=512 actual=512
+ts=10:30:45.123789012 syscall=close pid=5678 uid=10123 path="/data/app/config.db" fd=7
 ```
 
 **Fields:**
 - `ts` - Timestamp (HH:MM:SS.nanoseconds)
 - `syscall` - Syscall name (open/openat/read/write/close)
 - `pid` - Process ID
+- `uid` - User ID (Android app identifier: 0=root, 1000-1999=system, 10000+=apps)
 - `path` - File path (empty for unknown FDs)
 - `fd` - File descriptor number
 - `flags` - Open flags (open/openat only)

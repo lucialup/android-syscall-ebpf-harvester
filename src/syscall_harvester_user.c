@@ -22,6 +22,8 @@
 struct open_event {
 	__u32 pid;
 	__u32 syscall_type;
+	__u32 uid;
+	__u32 _pad;
 	__u64 ts;
 	long flags;
 	int fd;
@@ -88,14 +90,14 @@ static void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 
 		print_timestamp(e->ts);
 		if (e->syscall_type == SYSCALL_CLOSE) {
-			printf("syscall=%s pid=%u path=\"%s\" fd=%d\n",
-				   syscall_name, e->pid, e->filename, e->fd);
+			printf("syscall=%s pid=%u uid=%u path=\"%s\" fd=%d\n",
+				   syscall_name, e->pid, e->uid, e->filename, e->fd);
 		} else if (e->syscall_type == SYSCALL_READ || e->syscall_type == SYSCALL_WRITE) {
-			printf("syscall=%s pid=%u path=\"%s\" fd=%d count=%ld actual=%ld\n",
-				   syscall_name, e->pid, e->filename, e->fd, e->flags, e->actual_count);
+			printf("syscall=%s pid=%u uid=%u path=\"%s\" fd=%d count=%ld actual=%ld\n",
+				   syscall_name, e->pid, e->uid, e->filename, e->fd, e->flags, e->actual_count);
 		} else {
-			printf("syscall=%s pid=%u path=\"%s\" fd=%d flags=0x%lx\n",
-				   syscall_name, e->pid, e->filename, e->fd, e->flags);
+			printf("syscall=%s pid=%u uid=%u path=\"%s\" fd=%d flags=0x%lx\n",
+				   syscall_name, e->pid, e->uid, e->filename, e->fd, e->flags);
 		}
 	}
 }

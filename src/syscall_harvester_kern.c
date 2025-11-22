@@ -12,6 +12,8 @@
 struct open_event {
 	__u32 pid;
 	__u32 syscall_type;
+	__u32 uid;
+	__u32 _pad;
 	__u64 ts;
 	long flags;
 	int fd;
@@ -131,6 +133,7 @@ int trace_openat(struct pt_regs *ctx)
 	bpf_probe_read(&event.flags, sizeof(event.flags), &PT_REGS_PARM3(regs));
 
 	event.pid = pid;
+	event.uid = (__u32)bpf_get_current_uid_gid();
 	event.syscall_type = SYSCALL_OPENAT;
 	event.ts = bpf_ktime_get_ns();
 	event.fd = -1;
@@ -204,6 +207,7 @@ int trace_open(struct pt_regs *ctx)
 	bpf_probe_read(&event.flags, sizeof(event.flags), &PT_REGS_PARM2(regs));
 
 	event.pid = pid;
+	event.uid = (__u32)bpf_get_current_uid_gid();
 	event.syscall_type = SYSCALL_OPEN;
 	event.ts = bpf_ktime_get_ns();
 	event.fd = -1;
@@ -280,6 +284,7 @@ int trace_close(struct pt_regs *ctx)
 	}
 
 	event.pid = pid;
+	event.uid = (__u32)bpf_get_current_uid_gid();
 	event.syscall_type = SYSCALL_CLOSE;
 	event.ts = bpf_ktime_get_ns();
 	event.flags = 0;
@@ -329,10 +334,11 @@ int trace_read(struct pt_regs *ctx)
 	}
 
 	event.pid = pid;
+	event.uid = (__u32)bpf_get_current_uid_gid();
 	event.syscall_type = SYSCALL_READ;
 	event.ts = bpf_ktime_get_ns();
 	event.fd = fd;
-	event.flags = count; 
+	event.flags = count;
 	event.actual_count = 0;
 
 	fdk.pid = pid;
@@ -426,6 +432,7 @@ int trace_write(struct pt_regs *ctx)
 	}
 
 	event.pid = pid;
+	event.uid = (__u32)bpf_get_current_uid_gid();
 	event.syscall_type = SYSCALL_WRITE;
 	event.ts = bpf_ktime_get_ns();
 	event.fd = fd;
