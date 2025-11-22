@@ -15,9 +15,10 @@
 #define SYSCALL_CLOSE   3
 #define SYSCALL_READ    4
 #define SYSCALL_WRITE   5
+#define SYSCALL_CLONE   6
 
-// Number of BPF programs: openat, openat_ret, open, open_ret, close, read, read_ret, write, write_ret
-#define NUM_BPF_PROGRAMS 9
+// Number of BPF programs: openat, openat_ret, open, open_ret, close, read, read_ret, write, write_ret, clone, clone_ret
+#define NUM_BPF_PROGRAMS 11
 
 struct open_event {
 	__u32 pid;
@@ -84,6 +85,8 @@ static void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 			syscall_name = "read";
 		} else if (e->syscall_type == SYSCALL_WRITE) {
 			syscall_name = "write";
+		} else if (e->syscall_type == SYSCALL_CLONE) {
+			syscall_name = "clone";
 		} else {
 			syscall_name = "unknown";
 		}
@@ -95,6 +98,21 @@ static void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 		} else if (e->syscall_type == SYSCALL_READ || e->syscall_type == SYSCALL_WRITE) {
 			printf("syscall=%s pid=%u uid=%u path=\"%s\" fd=%d count=%ld actual=%ld\n",
 				   syscall_name, e->pid, e->uid, e->filename, e->fd, e->flags, e->actual_count);
+		} else if (e->syscall_type == SYSCALL_CLONE) {
+			#define CLONE_VM      0x00000100
+			#define CLONE_THREAD  0x00010000
+
+			const char *type;
+			if (e->flags & CLONE_THREAD) {
+				type = "thread";
+			} else if (e->flags & CLONE_VM) {
+				type = "lightweight_process";
+			} else {
+				type = "process";
+			}
+
+			printf("syscall=%s pid=%u uid=%u child_pid=%ld flags=0x%lx type=%s\n",
+				   syscall_name, e->pid, e->uid, e->actual_count, e->flags, type);
 		} else {
 			printf("syscall=%s pid=%u uid=%u path=\"%s\" fd=%d flags=0x%lx\n",
 				   syscall_name, e->pid, e->uid, e->filename, e->fd, e->flags);
@@ -215,7 +233,7 @@ int main(int argc, char **argv)
 	signal(SIGINT, sig_handler);
 	signal(SIGTERM, sig_handler);
 
-	printf("Tracing open/openat/close/read/write syscalls with active filters\n");
+	printf("Tracing open/openat/close/read/write/clone syscalls with active filters\n");
 	printf("Filtered out: /etc/localtime, /proc/*, /sys/*, /dev/urandom, PID %u\n", my_pid);
 	printf("=======================================================================\n");
 	printf("%-20s %-8s %-30s %s\n", "TIMESTAMP", "PID", "SYSCALL/PARAMS", "FILENAME");
