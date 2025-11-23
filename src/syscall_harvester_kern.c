@@ -9,7 +9,14 @@
 #define SYSCALL_READ    4
 #define SYSCALL_WRITE   5
 #define SYSCALL_CLONE   6
+#define SYSCALL_EXECVE  7
 
+// Execve buffer constants
+#define EXECVE_PATH_MAX 80
+#define EXECVE_ARG_MAX 30
+#define EXECVE_SEPARATOR_OFFSET 80
+#define EXECVE_ARGV_START_OFFSET 83
+#define EXECVE_ARGC_MAX 5
 struct open_event {
 	__u32 pid;
 	__u32 syscall_type;
@@ -64,6 +71,13 @@ struct {
 	__uint(value_size, sizeof(struct open_event));
 	__uint(max_entries, 10240);
 } clone_inflight SEC(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(key_size, sizeof(__u64));
+	__uint(value_size, sizeof(struct open_event));
+	__uint(max_entries, 10240);
+} execve_inflight SEC(".maps");
 
 struct fd_key {
 	__u32 pid;
@@ -564,6 +578,99 @@ int trace_clone_ret(struct pt_regs *ctx)
 
 	// Store child PID in actual_count (lazyness to avoid changing struct), to be cleaned up
 	event->actual_count = ret;
+
+	bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
+			      event, sizeof(*event));
+
+	return 0;
+}
+
+/* Kprobe for execve syscall - entry */
+SEC("kprobe/__x64_sys_execve")
+int trace_execve(struct pt_regs *ctx)
+{
+	struct open_event event = {};
+	struct pt_regs *regs;
+	const char *filename;
+	const char **argv;
+	const char *arg_ptr;
+	__u32 pid;
+	__u32 key = 0;
+	__u32 *filter_pid_ptr;
+	__u64 pid_tgid;
+
+	pid = bpf_get_current_pid_tgid() >> 32;
+	pid_tgid = bpf_get_current_pid_tgid();
+
+	filter_pid_ptr = bpf_map_lookup_elem(&filter_pid, &key);
+	if (filter_pid_ptr && *filter_pid_ptr == pid) {
+		return 0;
+	}
+
+	regs = (struct pt_regs *)PT_REGS_PARM1(ctx);
+
+	bpf_probe_read(&filename, sizeof(filename), &PT_REGS_PARM1(regs));
+
+	event.pid = pid;
+	event.uid = (__u32)bpf_get_current_uid_gid();
+	event.syscall_type = SYSCALL_EXECVE;
+	event.ts = bpf_ktime_get_ns();
+	event.fd = 0;
+	event.flags = 0;
+	event.actual_count = 0;
+
+	bpf_probe_read_user_str(&event.filename, EXECVE_PATH_MAX, filename);
+
+	if (should_filter_file(event.filename))
+		return 0;
+
+	bpf_probe_read(&argv, sizeof(argv), &PT_REGS_PARM2(regs));
+
+	event.filename[EXECVE_SEPARATOR_OFFSET] = ' ';
+	event.filename[EXECVE_SEPARATOR_OFFSET + 1] = '|';
+	event.filename[EXECVE_SEPARATOR_OFFSET + 2] = ' ';
+
+	// Concatenate up to EXECVE_ARGC_MAX argv strings at fixed offsets
+	// Each arg is placed at EXECVE_ARGV_START_OFFSET + i * EXECVE_ARG_MAX
+	if (argv) {
+		#pragma unroll
+		for (int i = 0; i < EXECVE_ARGC_MAX; i++) {
+			int offset = EXECVE_ARGV_START_OFFSET + (i * EXECVE_ARG_MAX);
+
+			bpf_probe_read(&arg_ptr, sizeof(arg_ptr), &argv[i]);
+			if (arg_ptr) {
+				bpf_probe_read_user_str(&event.filename[offset], EXECVE_ARG_MAX, arg_ptr);
+				if (i < EXECVE_ARGC_MAX - 1) {
+					event.filename[offset + EXECVE_ARG_MAX - 1] = ' ';
+				}
+			}
+		}
+	}
+
+	bpf_map_update_elem(&execve_inflight, &pid_tgid, &event, BPF_ANY);
+
+	return 0;
+}
+
+/* Kretprobe for execve syscall - return */
+SEC("kretprobe/__x64_sys_execve")
+int trace_execve_ret(struct pt_regs *ctx)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	struct open_event *event;
+	long ret;
+
+	event = bpf_map_lookup_elem(&execve_inflight, &pid_tgid);
+	if (!event)
+		return 0;
+
+	ret = PT_REGS_RC(ctx);
+
+	bpf_map_delete_elem(&execve_inflight, &pid_tgid);
+
+	if (ret != 0) {
+		return 0;
+	}
 
 	bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
 			      event, sizeof(*event));

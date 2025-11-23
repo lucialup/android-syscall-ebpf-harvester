@@ -16,9 +16,15 @@
 #define SYSCALL_READ    4
 #define SYSCALL_WRITE   5
 #define SYSCALL_CLONE   6
+#define SYSCALL_EXECVE  7
 
-// Number of BPF programs: openat, openat_ret, open, open_ret, close, read, read_ret, write, write_ret, clone, clone_ret
-#define NUM_BPF_PROGRAMS 11
+// Number of BPF programs: openat, openat_ret, open, open_ret, close, read, read_ret, write, write_ret, clone, clone_ret, execve, execve_ret
+#define NUM_BPF_PROGRAMS 13
+
+// Execve argv buffer layout: path (0-79), separator (80-82), argv[0-4] at fixed offsets
+#define EXECVE_PATH_SIZE 80
+#define EXECVE_ARGV_OFFSETS { 83, 113, 143, 173, 203 }
+#define EXECVE_ARGC_MAX 5
 
 struct open_event {
 	__u32 pid;
@@ -87,6 +93,8 @@ static void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 			syscall_name = "write";
 		} else if (e->syscall_type == SYSCALL_CLONE) {
 			syscall_name = "clone";
+		} else if (e->syscall_type == SYSCALL_EXECVE) {
+			syscall_name = "execve";
 		} else {
 			syscall_name = "unknown";
 		}
@@ -113,6 +121,22 @@ static void handle_event(void *ctx, int cpu, void *data, __u32 data_sz)
 
 			printf("syscall=%s pid=%u uid=%u child_pid=%ld flags=0x%lx type=%s\n",
 				   syscall_name, e->pid, e->uid, e->actual_count, e->flags, type);
+		} else if (e->syscall_type == SYSCALL_EXECVE) {
+			const int argv_offsets[] = EXECVE_ARGV_OFFSETS;
+
+			printf("syscall=%s pid=%u uid=%u path=\"%s\" argv=[",
+				   syscall_name, e->pid, e->uid, e->filename);
+
+			int first = 1;
+			for (int i = 0; i < EXECVE_ARGC_MAX; i++) {
+				if (e->filename[argv_offsets[i]]) {
+					if (!first) printf(", ");
+					printf("\"%s\"", &e->filename[argv_offsets[i]]);
+					first = 0;
+				}
+			}
+
+			printf("]\n");
 		} else {
 			printf("syscall=%s pid=%u uid=%u path=\"%s\" fd=%d flags=0x%lx\n",
 				   syscall_name, e->pid, e->uid, e->filename, e->fd, e->flags);
@@ -233,7 +257,7 @@ int main(int argc, char **argv)
 	signal(SIGINT, sig_handler);
 	signal(SIGTERM, sig_handler);
 
-	printf("Tracing open/openat/close/read/write/clone syscalls with active filters\n");
+	printf("Tracing open/openat/close/read/write/clone/execve syscalls with active filters\n");
 	printf("Filtered out: /etc/localtime, /proc/*, /sys/*, /dev/urandom, PID %u\n", my_pid);
 	printf("=======================================================================\n");
 	printf("%-20s %-8s %-30s %s\n", "TIMESTAMP", "PID", "SYSCALL/PARAMS", "FILENAME");

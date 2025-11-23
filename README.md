@@ -18,6 +18,8 @@ Create labeled datasets of syscall behavior from:
 - **read** - File reads (path, fd, bytes requested/actual)
 - **write** - File writes (path, fd, bytes requested/actual)
 - **close** - File closes (path, fd)
+- **clone** - Process/thread creation (parent PID, child PID, flags, type)
+- **execve** - Program execution (path, argv array with up to 5 arguments)
 
 ## Architecture
 
@@ -96,18 +98,23 @@ ts=10:30:45.123456789 syscall=openat pid=5678 uid=10123 path="/data/app/config.d
 ts=10:30:45.123567890 syscall=read pid=5678 uid=10123 path="/data/app/config.db" fd=7 count=4096 actual=2048
 ts=10:30:45.123678901 syscall=write pid=5678 uid=10123 path="/data/app/config.db" fd=7 count=512 actual=512
 ts=10:30:45.123789012 syscall=close pid=5678 uid=10123 path="/data/app/config.db" fd=7
+ts=10:30:45.124001234 syscall=clone pid=5678 uid=10123 child_pid=5680 flags=0x1200011 type=process
+ts=10:30:45.124112345 syscall=execve pid=5680 uid=10123 path="/system/bin/sh" argv=["/system/bin/sh", "-c", "rm -rf /data/app"]
 ```
 
 **Fields:**
 - `ts` - Timestamp (HH:MM:SS.nanoseconds)
-- `syscall` - Syscall name (open/openat/read/write/close)
+- `syscall` - Syscall name (open/openat/read/write/close/clone/execve)
 - `pid` - Process ID
 - `uid` - User ID (Android app identifier: 0=root, 1000-1999=system, 10000+=apps)
 - `path` - File path (empty for unknown FDs)
 - `fd` - File descriptor number
-- `flags` - Open flags (open/openat only)
+- `flags` - Open flags (open/openat only) or clone flags (clone only)
 - `count` - Bytes requested (read/write only)
 - `actual` - Bytes actually read/written (read/write only)
+- `child_pid` - Child process ID (clone only)
+- `type` - Process creation type: process/thread/lightweight_process (clone only)
+- `argv` - Command-line arguments as JSON array, up to 5 args (execve only)
 
 ## Project Structure
 
