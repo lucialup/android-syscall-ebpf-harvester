@@ -87,7 +87,7 @@ make deploy
 ```bash
 # On Android emulator
 adb shell
-cd /data/local/tmp/bpf
+cd /data/local/tmp/syscall-harvester
 ./syscall_harvester
 ```
 
@@ -121,8 +121,17 @@ ts=10:30:45.124112345 syscall=execve pid=5680 uid=10123 path="/system/bin/sh" ar
 ```
 android-syscall-harvester/
 ├── src/
-│   ├── syscall_harvester_kern.c    # eBPF kernel program
-│   └── syscall_harvester_user.c    # Userspace collector
+│   ├── syscall_harvester_kern.c    # BPF main file (includes handlers)
+│   ├── common.h                     # Shared type definitions
+│   ├── bpf/
+│   │   ├── bpf_maps.h              # BPF map definitions
+│   │   ├── bpf_utils.h             # Utilities & filters
+│   │   ├── file_syscalls.bpf.c    # File I/O handlers
+│   │   └── process_syscalls.bpf.c # Process lifecycle handlers
+│   └── userspace/
+│       ├── bpf_loader.{c,h}        # BPF loading & management
+│       ├── output.{c,h}            # Event formatting
+│       └── main.c                  # Program entry point
 ├── include/                         # Required headers
 ├── lib/                             # libbpf static library
 ├── Makefile                         # Build system

@@ -1,40 +1,43 @@
-# Compiler settings
 CLANG := clang
 LLC := llc
 GCC := gcc
 
-# Target architecture
 ARCH := x86
 TARGET_ARCH := -D__TARGET_ARCH_$(ARCH)
 
-# Directories
 SRC_DIR := src
+BPF_DIR := $(SRC_DIR)/bpf
+USERSPACE_DIR := $(SRC_DIR)/userspace
 BUILD_DIR := build
 INCLUDE_DIR := include
 LIB_DIR := lib
 
-# Output files
 BPF_OBJ := $(BUILD_DIR)/syscall_harvester_kern.o
 USER_BIN := $(BUILD_DIR)/syscall_harvester
 
-# BPF compilation flags
+BPF_SOURCE := $(SRC_DIR)/syscall_harvester_kern.c
+
+USER_SOURCES := $(USERSPACE_DIR)/main.c $(USERSPACE_DIR)/bpf_loader.c $(USERSPACE_DIR)/output.c
+USER_OBJECTS := $(patsubst $(USERSPACE_DIR)/%.c,$(BUILD_DIR)/%.o,$(USER_SOURCES))
+
 BPF_CFLAGS := -O2 \
 	-target bpf \
 	-g \
 	$(TARGET_ARCH) \
 	-I$(INCLUDE_DIR) \
 	-I$(INCLUDE_DIR)/uapi \
+	-I$(SRC_DIR) \
 	-Wall \
 	-Wno-unused-value \
 	-Wno-pointer-sign \
 	-Wno-compare-distinct-pointer-types
 
-# Userspace compilation flags
 USER_CFLAGS := -Wall \
 	-O2 \
 	-static \
 	-I$(INCLUDE_DIR) \
-	-I$(INCLUDE_DIR)/bpf
+	-I$(INCLUDE_DIR)/bpf \
+	-I$(SRC_DIR)
 
 USER_LDFLAGS := -L$(LIB_DIR) \
 	-l:libbpf.a \
@@ -54,19 +57,23 @@ all: $(BUILD_DIR) $(BPF_OBJ) $(USER_BIN)
 $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)
 
-# Compile BPF program
-$(BPF_OBJ): $(SRC_DIR)/syscall_harvester_kern.c | $(BUILD_DIR)
+# Compile BPF kernel program
+$(BPF_OBJ): $(BPF_SOURCE) $(BPF_DIR)/*.c $(BPF_DIR)/*.h $(SRC_DIR)/common.h | $(BUILD_DIR)
 	@echo "Compiling BPF kernel program..."
-	$(CLANG) $(BPF_CFLAGS) -c $< -o $@
+	$(CLANG) $(BPF_CFLAGS) -c $(BPF_SOURCE) -o $@
 	@echo "✓ BPF compilation successful"
 
-# Compile userspace program
-$(USER_BIN): $(SRC_DIR)/syscall_harvester_user.c $(BPF_OBJ) | $(BUILD_DIR)
-	@echo "Compiling userspace program..."
-	$(GCC) $(USER_CFLAGS) $< -o $@ $(USER_LDFLAGS)
-	@echo "Userspace compilation successful"
+# Compile userspace source files to object files
+$(BUILD_DIR)/%.o: $(USERSPACE_DIR)/%.c $(USERSPACE_DIR)/*.h $(SRC_DIR)/common.h | $(BUILD_DIR)
+	@echo "Compiling userspace: $<"
+	$(GCC) $(USER_CFLAGS) -c $< -o $@
 
-# Deploy to Android device/emulator
+# Link userspace objects into final binary
+$(USER_BIN): $(USER_OBJECTS) $(BPF_OBJ) | $(BUILD_DIR)
+	@echo "Linking userspace binary..."
+	$(GCC) $(USER_CFLAGS) $(USER_OBJECTS) -o $@ $(USER_LDFLAGS)
+	@echo "✓ Userspace compilation successful"
+
 deploy: all
 	@echo "Deploying to Android device..."
 	@adb shell "mkdir -p /data/local/tmp/syscall-harvester" || true
@@ -80,12 +87,6 @@ deploy: all
 	@echo "  cd /data/local/tmp/syscall-harvester"
 	@echo "  ./syscall_harvester"
 
-# Test (requires device/emulator)
-test: deploy
-	@echo "Running test..."
-	@./scripts/test.sh
-
-# Clean build artifacts
 clean:
 	@echo "Cleaning artifacts..."
 	@rm -rf $(BUILD_DIR)
