@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <time.h>
+#include <arpa/inet.h>
 #include "../common.h"
 #include "output.h"
 
@@ -23,6 +24,8 @@ static const char *syscall_type_to_name(__u32 syscall_type)
 		return "clone";
 	case SYSCALL_EXECVE:
 		return "execve";
+	case SYSCALL_CONNECT:
+		return "connect";
 	default:
 		return "unknown";
 	}
@@ -49,6 +52,33 @@ static const char *get_clone_type(__u64 flags)
 	} else {
 		return "process";
 	}
+}
+
+static const char *get_family_name(__u64 family)
+{
+	switch (family) {
+	case AF_INET:
+		return "ipv4";
+	case AF_INET6:
+		return "ipv6";
+	case AF_UNIX:
+		return "unix";
+	default:
+		return "unknown";
+	}
+}
+
+static void format_ip_address(const char *raw_bytes, __u64 family, char *buf, size_t buf_size)
+{
+	const char *result = NULL;
+
+	if (family == AF_INET)
+		result = inet_ntop(AF_INET, raw_bytes, buf, buf_size);
+	else if (family == AF_INET6)
+		result = inet_ntop(AF_INET6, raw_bytes, buf, buf_size);
+
+	if (!result)
+		snprintf(buf, buf_size, "unknown");
 }
 
 /*
@@ -103,6 +133,16 @@ void output_event(const struct syscall_event *e)
 		}
 
 		printf("]\n");
+		break;
+	}
+
+	case SYSCALL_CONNECT: {
+		char ip_buf[64];
+		format_ip_address(e->filename, e->flags, ip_buf, sizeof(ip_buf));
+
+		printf("syscall=%s pid=%u tid=%u uid=%u comm=\"%s\" fd=%d family=\"%s\" ip=\"%s\" port=%lld\n",
+		       syscall_name, e->pid, e->tid, e->uid, e->comm, e->fd,
+		       get_family_name(e->flags), ip_buf, (long long)e->actual_count);
 		break;
 	}
 

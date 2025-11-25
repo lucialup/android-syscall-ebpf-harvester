@@ -21,6 +21,7 @@ Generate a syscall dataset from Android applications to enable:
 - **close** - File closes (pid, tid, uid, comm, path, fd)
 - **clone** - Process/thread creation (tid, uid, comm, parent PID, child PID, flags, type)
 - **execve** - Program execution (pid, tid, uid, comm, path, argv array with up to 5 arguments)
+- **connect** - Network connections (pid, tid, uid, comm, fd, family, ip, port)
  
 ## Architecture
 
@@ -32,7 +33,7 @@ Generate a syscall dataset from Android applications to enable:
 ├─────────────────────────────────────────┤
 │          Linux Kernel                   │
 │                                         │
-│   open/read/write/close/clone/execve   │
+│  open/read/write/close/clone/execve/connect │
 │              ↓ kprobe                   │
 │   ┌─────────────────────────────────┐  │
 │   │  eBPF Program (kernel space)    │  │
@@ -108,23 +109,27 @@ ts=10:30:45.123678901 syscall=write pid=5678 tid=5681 uid=10123 comm="AsyncTask 
 ts=10:30:45.123789012 syscall=close pid=5678 tid=5680 uid=10123 comm="RenderThread" path="/data/app/config.db" fd=7
 ts=10:30:45.124001234 syscall=clone pid=5678 tid=5678 uid=10123 comm="main" child_pid=5682 flags=0x1200011 type=process
 ts=10:30:45.124112345 syscall=execve pid=5682 tid=5682 uid=10123 comm="main" path="/system/bin/sh" argv=["/system/bin/sh", "-c", "ls"]
+ts=10:30:45.124223456 syscall=connect pid=5678 tid=5683 uid=10123 comm="OkHttp Dispatch" fd=15 family="ipv4" ip="142.250.185.206" port=443
 ```
 
 **Fields:**
 - `ts` - Timestamp (HH:MM:SS.nanoseconds)
-- `syscall` - Syscall name (open/openat/read/write/close/clone/execve)
+- `syscall` - Syscall name (open/openat/read/write/close/clone/execve/connect)
 - `pid` - Process ID (TGID - thread group ID)
 - `tid` - Thread ID (unique per thread, useful for multi-threaded component tracking)
 - `uid` - User ID (Android app identifier: 0=root, 1000-1999=system, 10000+=apps)
 - `comm` - Task/thread name (e.g., "RenderThread", "AsyncTask #1", "OkHttp Dispatch")
 - `path` - File path (empty for unknown FDs)
-- `fd` - File descriptor number
+- `fd` - File descriptor number (or socket fd for connect)
 - `flags` - Open flags (open/openat only) or clone flags (clone only)
 - `count` - Bytes requested (read/write only)
 - `actual` - Bytes actually read/written (read/write only)
 - `child_pid` - Child process ID (clone only)
 - `type` - Process creation type: process/thread/lightweight_process (clone only)
 - `argv` - Command-line arguments as JSON array, up to 5 args (execve only)
+- `family` - Address family: "ipv4" or "ipv6" (connect only)
+- `ip` - Destination IP address (connect only)
+- `port` - Destination port number (connect only)
 
 ## Project Structure
 
@@ -137,7 +142,8 @@ android-syscall-harvester/
 │   │   ├── bpf_maps.h              # BPF map definitions
 │   │   ├── bpf_utils.h             # Utilities & filters (init_event, filtering)
 │   │   ├── file_syscalls.bpf.c    # File I/O handlers (open/read/write/close)
-│   │   └── process_syscalls.bpf.c # Process lifecycle handlers (clone/execve)
+│   │   ├── process_syscalls.bpf.c # Process lifecycle handlers (clone/execve)
+│   │   └── network_syscalls.bpf.c # Network handlers (connect)
 │   └── userspace/
 │       ├── bpf_loader.{c,h}        # BPF loading & management
 │       ├── output.{c,h}            # Event formatting (tid/comm output)

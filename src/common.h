@@ -14,6 +14,7 @@
 #define SYSCALL_WRITE   5
 #define SYSCALL_CLONE   6
 #define SYSCALL_EXECVE  7
+#define SYSCALL_CONNECT 8
 
 #define MAX_PATH_LEN 256
 #define EXECVE_PATH_MAX 80
@@ -26,11 +27,35 @@
 #define CLONE_VM      0x00000100
 #define CLONE_THREAD  0x00010000
 
+#ifndef AF_UNIX
+#define AF_UNIX       1
+#endif
+#ifndef AF_INET
+#define AF_INET       2
+#endif
+#ifndef AF_INET6
+#define AF_INET6      10
+#endif
+
 /*
- * The syscall structure uses a single char buffer (filename[256]) that has
- * different purposes depending on syscall_type:
- * - For file operations: stores path
- * - For execve: stores path + separator + argv array at fixed offsets
+ * The syscall structure uses fields differently based on syscall_type:
+ *
+ * File operations (open/read/write/close):
+ *   - filename: file path
+ *   - fd: file descriptor
+ *   - flags: open flags (open/openat) or byte count (read/write)
+ *   - actual_count: bytes read/written (read/write)
+ *
+ * Process operations (clone/execve):
+ *   - filename: executable path + argv (execve)
+ *   - flags: clone flags
+ *   - actual_count: child PID (clone)
+ *
+ * Network operations (connect):
+ *   - filename: IP address as string
+ *   - fd: socket file descriptor
+ *   - flags: address family (AF_INET=2, AF_INET6=10)
+ *   - actual_count: port number
  */
 struct syscall_event {
 	__u32 pid;
