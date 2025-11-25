@@ -56,12 +56,14 @@ static __always_inline int should_filter_pid(__u32 pid)
 }
 
 
-static __always_inline void init_event(struct syscall_event *event, __u32 pid, __u32 syscall_type)
+static __always_inline void init_event(struct syscall_event *event, __u32 pid, __u32 tid, __u32 syscall_type)
 {
 	event->pid = pid;
+	event->tid = tid;
 	event->uid = (__u32)bpf_get_current_uid_gid();
 	event->syscall_type = syscall_type;
 	event->ts = bpf_ktime_get_ns();
+	bpf_get_current_comm(&event->comm, sizeof(event->comm));
 }
 
 #endif /* BPF_UTILS_H */

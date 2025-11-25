@@ -17,11 +17,12 @@ int trace_openat(struct pt_regs *ctx)
 	struct syscall_event event = {};
 	struct pt_regs *regs;
 	const char *filename;
-	__u32 pid;
+	__u32 pid, tid;
 	__u64 pid_tgid;
 
-	pid = bpf_get_current_pid_tgid() >> 32;
 	pid_tgid = bpf_get_current_pid_tgid();
+	pid = pid_tgid >> 32;
+	tid = (__u32)pid_tgid;
 
 	if (should_filter_pid(pid))
 		return 0;
@@ -31,7 +32,7 @@ int trace_openat(struct pt_regs *ctx)
 	bpf_probe_read(&filename, sizeof(filename), &PT_REGS_PARM2(regs));
 	bpf_probe_read(&event.flags, sizeof(event.flags), &PT_REGS_PARM3(regs));
 
-	init_event(&event, pid, SYSCALL_OPENAT);
+	init_event(&event, pid, tid, SYSCALL_OPENAT);
 	event.fd = -1;
 
 	bpf_probe_read_user_str(&event.filename, sizeof(event.filename), filename);
@@ -89,11 +90,12 @@ int trace_open(struct pt_regs *ctx)
 	struct syscall_event event = {};
 	struct pt_regs *regs;
 	const char *filename;
-	__u32 pid;
+	__u32 pid, tid;
 	__u64 pid_tgid;
 
-	pid = bpf_get_current_pid_tgid() >> 32;
 	pid_tgid = bpf_get_current_pid_tgid();
+	pid = pid_tgid >> 32;
+	tid = (__u32)pid_tgid;
 
 	if (should_filter_pid(pid))
 		return 0;
@@ -103,7 +105,7 @@ int trace_open(struct pt_regs *ctx)
 	bpf_probe_read(&filename, sizeof(filename), &PT_REGS_PARM1(regs));
 	bpf_probe_read(&event.flags, sizeof(event.flags), &PT_REGS_PARM2(regs));
 
-	init_event(&event, pid, SYSCALL_OPEN);
+	init_event(&event, pid, tid, SYSCALL_OPEN);
 	event.fd = -1;
 
 	bpf_probe_read_user_str(&event.filename, sizeof(event.filename), filename);
@@ -160,7 +162,9 @@ int trace_close(struct pt_regs *ctx)
 {
 	struct syscall_event event = {};
 	struct pt_regs *regs;
-	__u32 pid = bpf_get_current_pid_tgid() >> 32;
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	__u32 pid = pid_tgid >> 32;
+	__u32 tid = (__u32)pid_tgid;
 	struct fd_key fdk = {};
 	char *path_ptr;
 	int fd;
@@ -177,7 +181,7 @@ int trace_close(struct pt_regs *ctx)
 	if (!path_ptr)
 		return 0;
 
-	init_event(&event, pid, SYSCALL_CLOSE);
+	init_event(&event, pid, tid, SYSCALL_CLOSE);
 	event.flags = 0;
 	event.fd = fd;
 
@@ -202,15 +206,16 @@ int trace_read(struct pt_regs *ctx)
 {
 	struct syscall_event event = {};
 	struct pt_regs *regs;
-	__u32 pid;
+	__u32 pid, tid;
 	__u64 pid_tgid;
 	int fd;
 	long count;
 	struct fd_key fdk = {};
 	char *path_ptr;
 
-	pid = bpf_get_current_pid_tgid() >> 32;
 	pid_tgid = bpf_get_current_pid_tgid();
+	pid = pid_tgid >> 32;
+	tid = (__u32)pid_tgid;
 
 	if (should_filter_pid(pid))
 		return 0;
@@ -224,7 +229,7 @@ int trace_read(struct pt_regs *ctx)
 	if (fd <= 2)
 		return 0;
 
-	init_event(&event, pid, SYSCALL_READ);
+	init_event(&event, pid, tid, SYSCALL_READ);
 	event.fd = fd;
 	event.flags = count;  /* Store requested count in flags */
 	event.actual_count = 0;
@@ -297,15 +302,16 @@ int trace_write(struct pt_regs *ctx)
 {
 	struct syscall_event event = {};
 	struct pt_regs *regs;
-	__u32 pid;
+	__u32 pid, tid;
 	__u64 pid_tgid;
 	int fd;
 	long count;
 	struct fd_key fdk = {};
 	char *path_ptr;
 
-	pid = bpf_get_current_pid_tgid() >> 32;
 	pid_tgid = bpf_get_current_pid_tgid();
+	pid = pid_tgid >> 32;
+	tid = (__u32)pid_tgid;
 
 	if (should_filter_pid(pid))
 		return 0;
@@ -318,7 +324,7 @@ int trace_write(struct pt_regs *ctx)
 	if (fd <= 2)
 		return 0;
 
-	init_event(&event, pid, SYSCALL_WRITE);
+	init_event(&event, pid, tid, SYSCALL_WRITE);
 	event.fd = fd;
 	event.flags = count;
 	event.actual_count = 0;

@@ -1,40 +1,42 @@
 # Android Syscall Harvester
 
-**eBPF-based syscall tracer for building malware detection datasets on Android**
+**eBPF-based syscall tracer for dynamic SBOM extraction on Android**
 
 ## Overview
 
-This project uses eBPF (extended Berkeley Packet Filter) to capture syscall traces on Android OS for malware detection research. It hooks into the Linux kernel to monitor syscalls with minimal overhead.
+This project uses eBPF (extended Berkeley Packet Filter) to capture syscall traces on Android OS for dynamic Software Bill of Materials (SBOM) extraction. It hooks into the Linux kernel to monitor syscalls with minimal overhead, capturing component behavior for AI-based dependency analysis.
 
 ## Purpose
 
-Create labeled datasets of syscall behavior from:
-- **Benign applications** - Normal Android apps from Play Store
-- **Malware samples** - Known malicious applications
+Generate a syscall dataset from Android applications to enable:
+- **Dynamic SBOM extraction** - Identify software components and dependencies at runtime
+- **GNN-based analysis** - Use Graph Neural Networks to model component relationships
+- **Dependency mapping** - Track which components access which resources
 
 ## Syscalls Monitored
 
-- **open/openat** - File opens (path, flags, fd)
-- **read** - File reads (path, fd, bytes requested/actual)
-- **write** - File writes (path, fd, bytes requested/actual)
-- **close** - File closes (path, fd)
-- **clone** - Process/thread creation (parent PID, child PID, flags, type)
-- **execve** - Program execution (path, argv array with up to 5 arguments)
-
+- **open/openat** - File opens (pid, tid, uid, comm, path, flags, fd)
+- **read** - File reads (pid, tid, uid, comm, path, fd, bytes requested/actual)
+- **write** - File writes (pid, tid, uid, comm, path, fd, bytes requested/actual)
+- **close** - File closes (pid, tid, uid, comm, path, fd)
+- **clone** - Process/thread creation (tid, uid, comm, parent PID, child PID, flags, type)
+- **execve** - Program execution (pid, tid, uid, comm, path, argv array with up to 5 arguments)
+ 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────┐
-│     Android App (Benign/Malware)       │
-│         ↓ file I/O syscalls             │
+│          Android Application            │
+│    (multiple threads & components)      │
+│         ↓ syscalls                      │
 ├─────────────────────────────────────────┤
 │          Linux Kernel                   │
 │                                         │
-│   open/read/write/close syscall hooks  │
+│   open/read/write/close/clone/execve   │
 │              ↓ kprobe                   │
 │   ┌─────────────────────────────────┐  │
 │   │  eBPF Program (kernel space)    │  │
-│   │  - Capture metadata             │  │
+│   │  - Capture pid/tid/uid/comm     │  │
 │   │  - FD→path tracking             │  │
 │   │  - Filter noise & rate limit    │  │
 │   │  - Send to userspace            │  │
@@ -44,7 +46,13 @@ Create labeled datasets of syscall behavior from:
 │   Userspace Tracer                      │
 │   - Process events                      │
 │   - Format & log to stdout/file         │
-│   - Label: benign/malware               │
+│   - Component-level tracking            │
+└─────────────────────────────────────────┘
+          ↓
+┌─────────────────────────────────────────┐
+│   AI/GNN Analysis                       │
+│   - Build component dependency graph    │
+│   - Extract dynamic SBOM                │
 └─────────────────────────────────────────┘
 ```
 
@@ -94,19 +102,21 @@ cd /data/local/tmp/syscall-harvester
 ## Output Format
 
 ```
-ts=10:30:45.123456789 syscall=openat pid=5678 uid=10123 path="/data/app/config.db" fd=7 flags=0x0
-ts=10:30:45.123567890 syscall=read pid=5678 uid=10123 path="/data/app/config.db" fd=7 count=4096 actual=2048
-ts=10:30:45.123678901 syscall=write pid=5678 uid=10123 path="/data/app/config.db" fd=7 count=512 actual=512
-ts=10:30:45.123789012 syscall=close pid=5678 uid=10123 path="/data/app/config.db" fd=7
-ts=10:30:45.124001234 syscall=clone pid=5678 uid=10123 child_pid=5680 flags=0x1200011 type=process
-ts=10:30:45.124112345 syscall=execve pid=5680 uid=10123 path="/system/bin/sh" argv=["/system/bin/sh", "-c", "rm -rf /data/app"]
+ts=10:30:45.123456789 syscall=openat pid=5678 tid=5680 uid=10123 comm="RenderThread" path="/data/app/config.db" fd=7 flags=0x0
+ts=10:30:45.123567890 syscall=read pid=5678 tid=5680 uid=10123 comm="RenderThread" path="/data/app/config.db" fd=7 count=4096 actual=2048
+ts=10:30:45.123678901 syscall=write pid=5678 tid=5681 uid=10123 comm="AsyncTask #1" path="/data/app/config.db" fd=7 count=512 actual=512
+ts=10:30:45.123789012 syscall=close pid=5678 tid=5680 uid=10123 comm="RenderThread" path="/data/app/config.db" fd=7
+ts=10:30:45.124001234 syscall=clone pid=5678 tid=5678 uid=10123 comm="main" child_pid=5682 flags=0x1200011 type=process
+ts=10:30:45.124112345 syscall=execve pid=5682 tid=5682 uid=10123 comm="main" path="/system/bin/sh" argv=["/system/bin/sh", "-c", "ls"]
 ```
 
 **Fields:**
 - `ts` - Timestamp (HH:MM:SS.nanoseconds)
 - `syscall` - Syscall name (open/openat/read/write/close/clone/execve)
-- `pid` - Process ID
+- `pid` - Process ID (TGID - thread group ID)
+- `tid` - Thread ID (unique per thread, useful for multi-threaded component tracking)
 - `uid` - User ID (Android app identifier: 0=root, 1000-1999=system, 10000+=apps)
+- `comm` - Task/thread name (e.g., "RenderThread", "AsyncTask #1", "OkHttp Dispatch")
 - `path` - File path (empty for unknown FDs)
 - `fd` - File descriptor number
 - `flags` - Open flags (open/openat only) or clone flags (clone only)
@@ -122,27 +132,25 @@ ts=10:30:45.124112345 syscall=execve pid=5680 uid=10123 path="/system/bin/sh" ar
 android-syscall-harvester/
 ├── src/
 │   ├── syscall_harvester_kern.c    # BPF main file (includes handlers)
-│   ├── common.h                     # Shared type definitions
+│   ├── common.h                     # Shared type definitions (syscall_event struct)
 │   ├── bpf/
 │   │   ├── bpf_maps.h              # BPF map definitions
-│   │   ├── bpf_utils.h             # Utilities & filters
-│   │   ├── file_syscalls.bpf.c    # File I/O handlers
-│   │   └── process_syscalls.bpf.c # Process lifecycle handlers
+│   │   ├── bpf_utils.h             # Utilities & filters (init_event, filtering)
+│   │   ├── file_syscalls.bpf.c    # File I/O handlers (open/read/write/close)
+│   │   └── process_syscalls.bpf.c # Process lifecycle handlers (clone/execve)
 │   └── userspace/
 │       ├── bpf_loader.{c,h}        # BPF loading & management
-│       ├── output.{c,h}            # Event formatting
+│       ├── output.{c,h}            # Event formatting (tid/comm output)
 │       └── main.c                  # Program entry point
-├── include/                         # Required headers
+├── include/                         # Required headers (libbpf, uapi)
 ├── lib/                             # libbpf static library
 ├── Makefile                         # Build system
 ├── scripts/
 │   ├── deploy.sh                   # Deploy to device
-│   ├── collect_dataset.sh          # Automated collection
 │   └── test.sh                     # Test script
 ├── docs/
-│   ├── ARCHITECTURE.md
-│   ├── DATASET_FORMAT.md
-│   └── SYSCALLS.md
+│   ├── BUILD.md                    # Build instructions
+│   └── USAGE.md                    # Usage guide
 └── README.md
 ```
 

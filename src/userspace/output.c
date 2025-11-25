@@ -64,34 +64,34 @@ void output_event(const struct syscall_event *e)
 	switch (e->syscall_type) {
 	case SYSCALL_OPEN:
 	case SYSCALL_OPENAT:
-		printf("syscall=%s pid=%u uid=%u path=\"%s\" fd=%d flags=0x%llx\n",
-		       syscall_name, e->pid, e->uid, e->filename, e->fd,
+		printf("syscall=%s pid=%u tid=%u uid=%u comm=\"%s\" path=\"%s\" fd=%d flags=0x%llx\n",
+		       syscall_name, e->pid, e->tid, e->uid, e->comm, e->filename, e->fd,
 		       (unsigned long long)e->flags);
 		break;
 
 	case SYSCALL_CLOSE:
-		printf("syscall=%s pid=%u uid=%u path=\"%s\" fd=%d\n",
-		       syscall_name, e->pid, e->uid, e->filename, e->fd);
+		printf("syscall=%s pid=%u tid=%u uid=%u comm=\"%s\" path=\"%s\" fd=%d\n",
+		       syscall_name, e->pid, e->tid, e->uid, e->comm, e->filename, e->fd);
 		break;
 
 	case SYSCALL_READ:
 	case SYSCALL_WRITE:
-		printf("syscall=%s pid=%u uid=%u path=\"%s\" fd=%d count=%llu actual=%lld\n",
-		       syscall_name, e->pid, e->uid, e->filename, e->fd,
+		printf("syscall=%s pid=%u tid=%u uid=%u comm=\"%s\" path=\"%s\" fd=%d count=%llu actual=%lld\n",
+		       syscall_name, e->pid, e->tid, e->uid, e->comm, e->filename, e->fd,
 		       (unsigned long long)e->flags, (long long)e->actual_count);
 		break;
 
 	case SYSCALL_CLONE:
-		printf("syscall=%s pid=%u uid=%u child_pid=%lld flags=0x%llx type=%s\n",
-		       syscall_name, e->pid, e->uid, (long long)e->actual_count,
+		printf("syscall=%s pid=%u tid=%u uid=%u comm=\"%s\" child_pid=%lld flags=0x%llx type=%s\n",
+		       syscall_name, e->pid, e->tid, e->uid, e->comm, (long long)e->actual_count,
 		       (unsigned long long)e->flags, get_clone_type(e->flags));
 		break;
 
 	case SYSCALL_EXECVE: {
 		int first = 1;
 
-		printf("syscall=%s pid=%u uid=%u path=\"%s\" argv=[",
-		       syscall_name, e->pid, e->uid, e->filename);
+		printf("syscall=%s pid=%u tid=%u uid=%u comm=\"%s\" path=\"%s\" argv=[",
+		       syscall_name, e->pid, e->tid, e->uid, e->comm, e->filename);
 
 		for (int i = 0; i < EXECVE_ARGC_MAX; i++) {
 			if (e->filename[argv_offsets[i]]) {
@@ -107,8 +107,8 @@ void output_event(const struct syscall_event *e)
 	}
 
 	default:
-		printf("syscall=%s pid=%u uid=%u (unknown format)\n",
-		       syscall_name, e->pid, e->uid);
+		printf("syscall=%s pid=%u tid=%u uid=%u comm=\"%s\" (unknown format)\n",
+		       syscall_name, e->pid, e->tid, e->uid, e->comm);
 		break;
 	}
 }

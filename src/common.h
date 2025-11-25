@@ -34,13 +34,14 @@
  */
 struct syscall_event {
 	__u32 pid;
+	__u32 tid;
 	__u32 syscall_type;
 	__u32 uid;
-	__u32 _pad;
 	__u64 ts;
-	__u64 flags;     
-	int fd;              
+	__u64 flags;
+	int fd;
 	__s64 actual_count;
+	char comm[16];
 	char filename[256];
 } __attribute__((packed));
 
