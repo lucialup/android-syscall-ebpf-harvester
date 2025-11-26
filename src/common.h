@@ -17,6 +17,7 @@
 #define SYSCALL_CONNECT 8
 #define SYSCALL_MMAP    9
 #define SYSCALL_SOCKET  10
+#define SYSCALL_UNLINKAT 11
 
 #define MAX_PATH_LEN 256
 #define EXECVE_PATH_MAX 80
@@ -72,6 +73,10 @@
 #define SOCK_RAW      3
 #endif
 
+#ifndef AT_REMOVEDIR
+#define AT_REMOVEDIR  0x200
+#endif
+
 /*
  * The syscall structure uses fields differently based on syscall_type:
  *
@@ -100,6 +105,11 @@
  *   - filename: file path (from fd_to_path) or empty for anonymous
  *   - fd: file descriptor (-1 for MAP_ANONYMOUS)
  *   - flags: prot (lower 32 bits) | mmap_flags (upper 32 bits)
+ *
+ * File deletion (unlinkat):
+ *   - filename: path to delete
+ *   - fd: directory file descriptor (AT_FDCWD for cwd)
+ *   - flags: AT_REMOVEDIR if removing directory, 0 otherwise
  */
 struct syscall_event {
 	__u32 pid;

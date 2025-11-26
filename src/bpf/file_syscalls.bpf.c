@@ -386,4 +386,71 @@ int trace_write_ret(struct pt_regs *ctx)
 	return 0;
 }
 
+/*
+ * Kprobe for unlinkat syscall - entry point
+ */
+SEC("kprobe/__x64_sys_unlinkat")
+int trace_unlinkat(struct pt_regs *ctx)
+{
+	struct syscall_event event = {};
+	struct pt_regs *regs;
+	const char *pathname;
+	__u32 pid, tid;
+	__u64 pid_tgid;
+	int dirfd, flags;
+
+	pid_tgid = bpf_get_current_pid_tgid();
+	pid = pid_tgid >> 32;
+	tid = (__u32)pid_tgid;
+
+	if (should_filter_pid(pid))
+		return 0;
+
+	regs = (struct pt_regs *)PT_REGS_PARM1(ctx);
+
+	bpf_probe_read(&dirfd, sizeof(dirfd), &PT_REGS_PARM1(regs));
+	bpf_probe_read(&pathname, sizeof(pathname), &PT_REGS_PARM2(regs));
+	bpf_probe_read(&flags, sizeof(flags), &PT_REGS_PARM3(regs));
+
+	init_event(&event, pid, tid, SYSCALL_UNLINKAT);
+	event.fd = dirfd;
+	event.flags = flags;
+
+	bpf_probe_read_user_str(&event.filename, sizeof(event.filename), pathname);
+
+	if (should_filter_file(event.filename))
+		return 0;
+
+	bpf_map_update_elem(&unlinkat_inflight, &pid_tgid, &event, BPF_ANY);
+
+	return 0;
+}
+
+/*
+ * Kretprobe for unlinkat syscall - return point
+ */
+SEC("kretprobe/__x64_sys_unlinkat")
+int trace_unlinkat_ret(struct pt_regs *ctx)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	struct syscall_event *event;
+	long ret;
+
+	event = bpf_map_lookup_elem(&unlinkat_inflight, &pid_tgid);
+	if (!event)
+		return 0;
+
+	ret = PT_REGS_RC(ctx);
+
+	bpf_map_delete_elem(&unlinkat_inflight, &pid_tgid);
+
+	if (ret != 0)
+		return 0;
+
+	bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
+			      event, sizeof(*event));
+
+	return 0;
+}
+
 char _license[] SEC("license") = "GPL";

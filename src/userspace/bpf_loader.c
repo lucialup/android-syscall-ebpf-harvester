@@ -8,7 +8,7 @@
 #include <bpf/bpf.h>
 #include "bpf_loader.h"
 
-#define MAX_BPF_PROGRAMS 20
+#define MAX_BPF_PROGRAMS 32
 
 static struct bpf_object *obj = NULL;
 static struct bpf_link *links[MAX_BPF_PROGRAMS] = {NULL};

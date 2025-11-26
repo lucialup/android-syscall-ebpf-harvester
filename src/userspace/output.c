@@ -30,6 +30,8 @@ static const char *syscall_type_to_name(__u32 syscall_type)
 		return "mmap";
 	case SYSCALL_SOCKET:
 		return "socket";
+	case SYSCALL_UNLINKAT:
+		return "unlinkat";
 	default:
 		return "unknown";
 	}
@@ -222,6 +224,12 @@ void output_event(const struct syscall_event *e)
 		       get_family_name(family), get_socket_type_name(type));
 		break;
 	}
+
+	case SYSCALL_UNLINKAT:
+		printf("syscall=%s pid=%u tid=%u uid=%u comm=\"%s\" path=\"%s\" dirfd=%d type=\"%s\"\n",
+		       syscall_name, e->pid, e->tid, e->uid, e->comm, e->filename, e->fd,
+		       (e->flags & AT_REMOVEDIR) ? "rmdir" : "unlink");
+		break;
 
 	default:
 		printf("syscall=%s pid=%u tid=%u uid=%u comm=\"%s\" (unknown format)\n",
