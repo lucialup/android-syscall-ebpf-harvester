@@ -16,6 +16,7 @@
 #define SYSCALL_EXECVE  7
 #define SYSCALL_CONNECT 8
 #define SYSCALL_MMAP    9
+#define SYSCALL_SOCKET  10
 
 #define MAX_PATH_LEN 256
 #define EXECVE_PATH_MAX 80
@@ -60,6 +61,17 @@
 #define MAP_ANONYMOUS 0x20
 #endif
 
+/* socket types */
+#ifndef SOCK_STREAM
+#define SOCK_STREAM   1
+#endif
+#ifndef SOCK_DGRAM
+#define SOCK_DGRAM    2
+#endif
+#ifndef SOCK_RAW
+#define SOCK_RAW      3
+#endif
+
 /*
  * The syscall structure uses fields differently based on syscall_type:
  *
@@ -75,10 +87,14 @@
  *   - actual_count: child PID (clone)
  *
  * Network operations (connect):
- *   - filename: IP address as string
+ *   - filename: IP address as raw bytes
  *   - fd: socket file descriptor
  *   - flags: address family (AF_INET=2, AF_INET6=10)
  *   - actual_count: port number
+ *
+ * Network operations (socket):
+ *   - fd: returned socket file descriptor
+ *   - flags: family (lower 32 bits) | type (upper 32 bits)
  *
  * Memory operations (mmap):
  *   - filename: file path (from fd_to_path) or empty for anonymous

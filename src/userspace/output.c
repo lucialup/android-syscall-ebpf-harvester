@@ -28,6 +28,8 @@ static const char *syscall_type_to_name(__u32 syscall_type)
 		return "connect";
 	case SYSCALL_MMAP:
 		return "mmap";
+	case SYSCALL_SOCKET:
+		return "socket";
 	default:
 		return "unknown";
 	}
@@ -65,6 +67,20 @@ static const char *get_family_name(__u64 family)
 		return "ipv6";
 	case AF_UNIX:
 		return "unix";
+	default:
+		return "unknown";
+	}
+}
+
+static const char *get_socket_type_name(__u32 type)
+{
+	switch (type) {
+	case SOCK_STREAM:
+		return "tcp";
+	case SOCK_DGRAM:
+		return "udp";
+	case SOCK_RAW:
+		return "raw";
 	default:
 		return "unknown";
 	}
@@ -194,6 +210,16 @@ void output_event(const struct syscall_event *e)
 		       "prot=\"%s\" flags=\"%s\"\n",
 		       syscall_name, e->pid, e->tid, e->uid, e->comm, e->filename, e->fd,
 		       format_mmap_prot(prot), get_mmap_flags_str(mmap_flags));
+		break;
+	}
+
+	case SYSCALL_SOCKET: {
+		__u32 family = (__u32)(e->flags & 0xFFFFFFFF);
+		__u32 type = (__u32)(e->flags >> 32);
+
+		printf("syscall=%s pid=%u tid=%u uid=%u comm=\"%s\" fd=%d family=\"%s\" type=\"%s\"\n",
+		       syscall_name, e->pid, e->tid, e->uid, e->comm, e->fd,
+		       get_family_name(family), get_socket_type_name(type));
 		break;
 	}
 

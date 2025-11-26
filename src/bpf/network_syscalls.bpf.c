@@ -105,3 +105,67 @@ int trace_connect_ret(struct pt_regs *ctx)
 
 	return 0;
 }
+
+/*
+ * Kprobe for socket syscall - entry point
+ */
+SEC("kprobe/__x64_sys_socket")
+int trace_socket(struct pt_regs *ctx)
+{
+	struct syscall_event event = {};
+	struct pt_regs *regs;
+	__u32 pid, tid;
+	__u64 pid_tgid;
+	int domain, type;
+
+	pid_tgid = bpf_get_current_pid_tgid();
+	pid = pid_tgid >> 32;
+	tid = (__u32)pid_tgid;
+
+	if (should_filter_pid(pid))
+		return 0;
+
+	regs = (struct pt_regs *)PT_REGS_PARM1(ctx);
+	bpf_probe_read(&domain, sizeof(domain), &PT_REGS_PARM1(regs));
+	bpf_probe_read(&type, sizeof(type), &PT_REGS_PARM2(regs));
+
+	if (domain != AF_INET && domain != AF_INET6 && domain != AF_UNIX)
+		return 0;
+
+	type &= 0xF;
+
+	init_event(&event, pid, tid, SYSCALL_SOCKET);
+	event.flags = ((__u64)type << 32) | (__u32)domain;
+
+	bpf_map_update_elem(&socket_inflight, &pid_tgid, &event, BPF_ANY);
+
+	return 0;
+}
+
+/*
+ * Kretprobe for socket syscall - return point
+ */
+SEC("kretprobe/__x64_sys_socket")
+int trace_socket_ret(struct pt_regs *ctx)
+{
+	__u64 pid_tgid = bpf_get_current_pid_tgid();
+	struct syscall_event *event;
+	int fd;
+
+	event = bpf_map_lookup_elem(&socket_inflight, &pid_tgid);
+	if (!event)
+		return 0;
+
+	fd = (int)PT_REGS_RC(ctx);
+	if (fd < 0)
+		goto cleanup;
+
+	event->fd = fd;
+
+	bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
+			      event, sizeof(*event));
+
+cleanup:
+	bpf_map_delete_elem(&socket_inflight, &pid_tgid);
+	return 0;
+}
