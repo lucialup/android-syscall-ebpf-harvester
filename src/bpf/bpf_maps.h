@@ -64,6 +64,13 @@ struct {
 	__uint(max_entries, 10240);
 } execve_inflight SEC(".maps");
 
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(key_size, sizeof(__u64));
+	__uint(value_size, sizeof(struct syscall_event));
+	__uint(max_entries, 10240);
+} mmap_inflight SEC(".maps");
+
 struct fd_key {
 	__u32 pid;
 	__u32 fd;

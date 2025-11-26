@@ -15,6 +15,7 @@
 #define SYSCALL_CLONE   6
 #define SYSCALL_EXECVE  7
 #define SYSCALL_CONNECT 8
+#define SYSCALL_MMAP    9
 
 #define MAX_PATH_LEN 256
 #define EXECVE_PATH_MAX 80
@@ -37,6 +38,28 @@
 #define AF_INET6      10
 #endif
 
+/* mmap protection flags */
+#ifndef PROT_READ
+#define PROT_READ     0x1
+#endif
+#ifndef PROT_WRITE
+#define PROT_WRITE    0x2
+#endif
+#ifndef PROT_EXEC
+#define PROT_EXEC     0x4
+#endif
+
+/* mmap flags */
+#ifndef MAP_SHARED
+#define MAP_SHARED    0x01
+#endif
+#ifndef MAP_PRIVATE
+#define MAP_PRIVATE   0x02
+#endif
+#ifndef MAP_ANONYMOUS
+#define MAP_ANONYMOUS 0x20
+#endif
+
 /*
  * The syscall structure uses fields differently based on syscall_type:
  *
@@ -56,6 +79,11 @@
  *   - fd: socket file descriptor
  *   - flags: address family (AF_INET=2, AF_INET6=10)
  *   - actual_count: port number
+ *
+ * Memory operations (mmap):
+ *   - filename: file path (from fd_to_path) or empty for anonymous
+ *   - fd: file descriptor (-1 for MAP_ANONYMOUS)
+ *   - flags: prot (lower 32 bits) | mmap_flags (upper 32 bits)
  */
 struct syscall_event {
 	__u32 pid;

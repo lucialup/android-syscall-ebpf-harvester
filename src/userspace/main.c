@@ -84,7 +84,7 @@ int main(int argc, char **argv)
 	/* Print header */
 	fprintf(stderr, "\n");
 	fprintf(stderr, "=======================================================================\n");
-	fprintf(stderr, "Tracing open/openat/close/read/write/clone/execve/connect syscalls\n");
+	fprintf(stderr, "Tracing open/openat/close/read/write/clone/execve/connect/mmap syscalls\n");
 	fprintf(stderr, "Filtered out: /etc/localtime, /proc/*, /sys/*, /dev/urandom, PID %u\n", my_pid);
 	fprintf(stderr, "Press Ctrl+C to stop.\n");
 	fprintf(stderr, "=======================================================================\n");

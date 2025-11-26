@@ -26,6 +26,8 @@ static const char *syscall_type_to_name(__u32 syscall_type)
 		return "execve";
 	case SYSCALL_CONNECT:
 		return "connect";
+	case SYSCALL_MMAP:
+		return "mmap";
 	default:
 		return "unknown";
 	}
@@ -66,6 +68,44 @@ static const char *get_family_name(__u64 family)
 	default:
 		return "unknown";
 	}
+}
+
+static const char *format_mmap_prot(__u32 prot)
+{
+	static char buf[8];
+	int pos = 0;
+
+	if (prot == 0)
+		return "NONE";
+
+	if (prot & PROT_READ)
+		buf[pos++] = 'r';
+	if (prot & PROT_WRITE)
+		buf[pos++] = 'w';
+	if (prot & PROT_EXEC)
+		buf[pos++] = 'x';
+
+	buf[pos] = '\0';
+	return buf;
+}
+
+static const char *get_mmap_flags_str(__u32 mmap_flags)
+{
+	int is_anon = mmap_flags & MAP_ANONYMOUS;
+	int is_private = mmap_flags & MAP_PRIVATE;
+	int is_shared = mmap_flags & MAP_SHARED;
+
+	if (is_private && is_anon)
+		return "private_anon";
+	if (is_shared && is_anon)
+		return "shared_anon";
+	if (is_private)
+		return "private";
+	if (is_shared)
+		return "shared";
+	if (is_anon)
+		return "anon";
+	return "file";
 }
 
 static void format_ip_address(const char *raw_bytes, __u64 family, char *buf, size_t buf_size)
@@ -143,6 +183,17 @@ void output_event(const struct syscall_event *e)
 		printf("syscall=%s pid=%u tid=%u uid=%u comm=\"%s\" fd=%d family=\"%s\" ip=\"%s\" port=%lld\n",
 		       syscall_name, e->pid, e->tid, e->uid, e->comm, e->fd,
 		       get_family_name(e->flags), ip_buf, (long long)e->actual_count);
+		break;
+	}
+
+	case SYSCALL_MMAP: {
+		__u32 prot = (__u32)(e->flags & 0xFFFFFFFF);
+		__u32 mmap_flags = (__u32)(e->flags >> 32);
+
+		printf("syscall=%s pid=%u tid=%u uid=%u comm=\"%s\" path=\"%s\" fd=%d "
+		       "prot=\"%s\" flags=\"%s\"\n",
+		       syscall_name, e->pid, e->tid, e->uid, e->comm, e->filename, e->fd,
+		       format_mmap_prot(prot), get_mmap_flags_str(mmap_flags));
 		break;
 	}
 
