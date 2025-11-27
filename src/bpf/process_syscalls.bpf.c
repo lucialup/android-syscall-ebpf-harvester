@@ -14,7 +14,7 @@ int trace_clone(struct pt_regs *ctx)
 {
 	struct syscall_event event = {};
 	struct pt_regs *regs;
-	__u32 pid, tid;
+	__u32 pid, tid, uid;
 	__u64 pid_tgid;
 	unsigned long clone_flags;
 
@@ -23,6 +23,10 @@ int trace_clone(struct pt_regs *ctx)
 	tid = (__u32)pid_tgid;
 
 	if (should_filter_pid(pid))
+		return 0;
+
+	uid = (__u32)bpf_get_current_uid_gid();
+	if (should_filter_uid(uid))
 		return 0;
 
 	regs = (struct pt_regs *)PT_REGS_PARM1(ctx);
@@ -92,7 +96,7 @@ int trace_execve(struct pt_regs *ctx)
 	const char *filename;
 	const char **argv;
 	const char *arg_ptr;
-	__u32 pid, tid;
+	__u32 pid, tid, uid;
 	__u64 pid_tgid;
 
 	pid_tgid = bpf_get_current_pid_tgid();
@@ -100,6 +104,10 @@ int trace_execve(struct pt_regs *ctx)
 	tid = (__u32)pid_tgid;
 
 	if (should_filter_pid(pid))
+		return 0;
+
+	uid = (__u32)bpf_get_current_uid_gid();
+	if (should_filter_uid(uid))
 		return 0;
 
 	regs = (struct pt_regs *)PT_REGS_PARM1(ctx);

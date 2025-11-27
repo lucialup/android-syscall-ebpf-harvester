@@ -17,7 +17,7 @@ int trace_openat(struct pt_regs *ctx)
 	struct syscall_event event = {};
 	struct pt_regs *regs;
 	const char *filename;
-	__u32 pid, tid;
+	__u32 pid, tid, uid;
 	__u64 pid_tgid;
 
 	pid_tgid = bpf_get_current_pid_tgid();
@@ -25,6 +25,10 @@ int trace_openat(struct pt_regs *ctx)
 	tid = (__u32)pid_tgid;
 
 	if (should_filter_pid(pid))
+		return 0;
+
+	uid = (__u32)bpf_get_current_uid_gid();
+	if (should_filter_uid(uid))
 		return 0;
 
 	regs = (struct pt_regs *)PT_REGS_PARM1(ctx);
@@ -90,7 +94,7 @@ int trace_open(struct pt_regs *ctx)
 	struct syscall_event event = {};
 	struct pt_regs *regs;
 	const char *filename;
-	__u32 pid, tid;
+	__u32 pid, tid, uid;
 	__u64 pid_tgid;
 
 	pid_tgid = bpf_get_current_pid_tgid();
@@ -98,6 +102,10 @@ int trace_open(struct pt_regs *ctx)
 	tid = (__u32)pid_tgid;
 
 	if (should_filter_pid(pid))
+		return 0;
+
+	uid = (__u32)bpf_get_current_uid_gid();
+	if (should_filter_uid(uid))
 		return 0;
 
 	regs = (struct pt_regs *)PT_REGS_PARM1(ctx);
@@ -165,11 +173,16 @@ int trace_close(struct pt_regs *ctx)
 	__u64 pid_tgid = bpf_get_current_pid_tgid();
 	__u32 pid = pid_tgid >> 32;
 	__u32 tid = (__u32)pid_tgid;
+	__u32 uid;
 	struct fd_key fdk = {};
 	char *path_ptr;
 	int fd;
 
 	if (should_filter_pid(pid))
+		return 0;
+
+	uid = (__u32)bpf_get_current_uid_gid();
+	if (should_filter_uid(uid))
 		return 0;
 
 	regs = (struct pt_regs *)PT_REGS_PARM1(ctx);
@@ -206,7 +219,7 @@ int trace_read(struct pt_regs *ctx)
 {
 	struct syscall_event event = {};
 	struct pt_regs *regs;
-	__u32 pid, tid;
+	__u32 pid, tid, uid;
 	__u64 pid_tgid;
 	int fd;
 	long count;
@@ -218,6 +231,10 @@ int trace_read(struct pt_regs *ctx)
 	tid = (__u32)pid_tgid;
 
 	if (should_filter_pid(pid))
+		return 0;
+
+	uid = (__u32)bpf_get_current_uid_gid();
+	if (should_filter_uid(uid))
 		return 0;
 
 	regs = (struct pt_regs *)PT_REGS_PARM1(ctx);
@@ -302,7 +319,7 @@ int trace_write(struct pt_regs *ctx)
 {
 	struct syscall_event event = {};
 	struct pt_regs *regs;
-	__u32 pid, tid;
+	__u32 pid, tid, uid;
 	__u64 pid_tgid;
 	int fd;
 	long count;
@@ -314,6 +331,10 @@ int trace_write(struct pt_regs *ctx)
 	tid = (__u32)pid_tgid;
 
 	if (should_filter_pid(pid))
+		return 0;
+
+	uid = (__u32)bpf_get_current_uid_gid();
+	if (should_filter_uid(uid))
 		return 0;
 
 	regs = (struct pt_regs *)PT_REGS_PARM1(ctx);
@@ -395,7 +416,7 @@ int trace_unlinkat(struct pt_regs *ctx)
 	struct syscall_event event = {};
 	struct pt_regs *regs;
 	const char *pathname;
-	__u32 pid, tid;
+	__u32 pid, tid, uid;
 	__u64 pid_tgid;
 	int dirfd, flags;
 
@@ -404,6 +425,10 @@ int trace_unlinkat(struct pt_regs *ctx)
 	tid = (__u32)pid_tgid;
 
 	if (should_filter_pid(pid))
+		return 0;
+
+	uid = (__u32)bpf_get_current_uid_gid();
+	if (should_filter_uid(uid))
 		return 0;
 
 	regs = (struct pt_regs *)PT_REGS_PARM1(ctx);

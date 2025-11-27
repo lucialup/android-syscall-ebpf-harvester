@@ -14,7 +14,7 @@ int trace_mmap(struct pt_regs *ctx)
 {
 	struct syscall_event event = {};
 	struct pt_regs *regs;
-	__u32 pid, tid;
+	__u32 pid, tid, uid;
 	__u64 pid_tgid;
 	int fd;
 	unsigned long prot;
@@ -27,6 +27,10 @@ int trace_mmap(struct pt_regs *ctx)
 	tid = (__u32)pid_tgid;
 
 	if (should_filter_pid(pid))
+		return 0;
+
+	uid = (__u32)bpf_get_current_uid_gid();
+	if (should_filter_uid(uid))
 		return 0;
 
 	regs = (struct pt_regs *)PT_REGS_PARM1(ctx);

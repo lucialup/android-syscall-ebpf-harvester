@@ -55,6 +55,33 @@ static __always_inline int should_filter_pid(__u32 pid)
 	return 0;
 }
 
+/*
+ * Returns true if the UID should be filtered out (not traced)
+ */
+static __always_inline int should_filter_uid(__u32 uid)
+{
+	__u32 key_enabled = 0;
+	__u32 key_target = 1;
+	__u32 *enabled;
+	__u32 *target_uid;
+
+	enabled = bpf_map_lookup_elem(&filter_uid, &key_enabled);
+	if (!enabled || *enabled == 0) {
+		return 0;
+	}
+
+	target_uid = bpf_map_lookup_elem(&filter_uid, &key_target);
+	if (!target_uid) {
+		return 0;
+	}
+
+	if (uid != *target_uid) {
+		return 1;
+	}
+
+	return 0;
+}
+
 
 static __always_inline void init_event(struct syscall_event *event, __u32 pid, __u32 tid, __u32 syscall_type)
 {

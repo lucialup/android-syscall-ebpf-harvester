@@ -25,6 +25,18 @@ struct {
 } filter_pid SEC(".maps");
 
 /*
+ * UID filter for per-app tracing
+ * Key 0: enabled (0=disabled, 1=enabled)
+ * Key 1: target UID to trace
+ */
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__uint(key_size, sizeof(__u32));
+	__uint(value_size, sizeof(__u32));
+	__uint(max_entries, 2);
+} filter_uid SEC(".maps");
+
+/*
  * open_inflight tracks open/openat calls between entry and exit
  */
 struct {

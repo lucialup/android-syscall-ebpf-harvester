@@ -105,6 +105,42 @@ int bpf_loader_set_filter_pid(__u32 pid)
 	return 0;
 }
 
+int bpf_loader_set_filter_uid(__u32 uid, int enabled)
+{
+	int filter_map_fd;
+	__u32 key_enabled = 0;
+	__u32 key_target = 1;
+	__u32 enabled_val = enabled ? 1 : 0;
+
+	if (!obj) {
+		fprintf(stderr, "ERROR: BPF object not loaded\n");
+		return -1;
+	}
+
+	filter_map_fd = bpf_object__find_map_fd_by_name(obj, "filter_uid");
+	if (filter_map_fd < 0) {
+		fprintf(stderr, "WARNING: Could not find filter_uid map\n");
+		return -1;
+	}
+
+	if (bpf_map_update_elem(filter_map_fd, &key_enabled, &enabled_val, BPF_ANY) < 0) {
+		fprintf(stderr, "WARNING: Could not set UID filter enabled: %s\n", strerror(errno));
+		return -1;
+	}
+
+	if (enabled) {
+		if (bpf_map_update_elem(filter_map_fd, &key_target, &uid, BPF_ANY) < 0) {
+			fprintf(stderr, "WARNING: Could not set target UID: %s\n", strerror(errno));
+			return -1;
+		}
+		fprintf(stderr, "UID filter configured: tracing only UID %u\n", uid);
+	} else {
+		fprintf(stderr, "UID filter disabled: tracing all UIDs\n");
+	}
+
+	return 0;
+}
+
 /*
  * Attach all BPF programs to their respective hooks
  * Returns 0 for success, -1 for error

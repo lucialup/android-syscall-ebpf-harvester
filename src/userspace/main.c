@@ -10,7 +10,6 @@
 
 static volatile sig_atomic_t exiting = 0;
 
-
 static void sig_handler(int sig)
 {
 	exiting = 1;
@@ -38,6 +37,16 @@ int main(int argc, char **argv)
 	int events_fd;
 	int err = 0;
 	__u32 my_pid;
+	__u32 target_uid = 0;
+	int filter_uid_enabled = 0;
+
+	if (argc == 3 && argv[1][0] == '-' && argv[1][1] == 'u') {
+		target_uid = (__u32)atoi(argv[2]);
+		filter_uid_enabled = 1;
+	} else if (argc != 1) {
+		fprintf(stderr, "Usage: %s [-u UID]\n", argv[0]);
+		return 1;
+	}
 
 	my_pid = getpid();
 
@@ -55,6 +64,10 @@ int main(int argc, char **argv)
 
 	if (bpf_loader_set_filter_pid(my_pid) < 0) {
 		fprintf(stderr, "WARNING: PID filter not set (continuing anyway)\n");
+	}
+
+	if (bpf_loader_set_filter_uid(target_uid, filter_uid_enabled) < 0) {
+		fprintf(stderr, "WARNING: UID filter not set (continuing anyway)\n");
 	}
 
 	if (bpf_loader_attach_all() < 0) {
@@ -86,6 +99,11 @@ int main(int argc, char **argv)
 	fprintf(stderr, "=======================================================================\n");
 	fprintf(stderr, "Tracing open/openat/close/read/write/clone/execve/connect/mmap/socket/unlinkat syscalls\n");
 	fprintf(stderr, "Filtered out: /etc/localtime, /proc/*, /sys/*, /dev/urandom, PID %u\n", my_pid);
+	if (filter_uid_enabled) {
+		fprintf(stderr, "UID filter: ENABLED - tracing only UID %u\n", target_uid);
+	} else {
+		fprintf(stderr, "UID filter: DISABLED - tracing all UIDs\n");
+	}
 	fprintf(stderr, "Press Ctrl+C to stop.\n");
 	fprintf(stderr, "=======================================================================\n");
 	fprintf(stderr, "\n");
