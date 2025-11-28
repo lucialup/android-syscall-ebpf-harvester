@@ -19,9 +19,12 @@ Generate a syscall dataset from Android applications to enable:
 - **read** - File reads (pid, tid, uid, comm, path, fd, bytes requested/actual)
 - **write** - File writes (pid, tid, uid, comm, path, fd, bytes requested/actual)
 - **close** - File closes (pid, tid, uid, comm, path, fd)
+- **unlinkat** - File/directory deletion (pid, tid, uid, comm, path, dirfd, type)
 - **clone** - Process/thread creation (tid, uid, comm, parent PID, child PID, flags, type)
 - **execve** - Program execution (pid, tid, uid, comm, path, argv array with up to 5 arguments)
 - **connect** - Network connections (pid, tid, uid, comm, fd, family, ip, port)
+- **socket** - Socket creation (pid, tid, uid, comm, fd, family, type)
+- **mmap** - Memory mapping (pid, tid, uid, comm, path, fd, prot, flags)
  
 ## Architecture
 
@@ -33,7 +36,8 @@ Generate a syscall dataset from Android applications to enable:
 ├─────────────────────────────────────────┤
 │          Linux Kernel                   │
 │                                         │
-│  open/read/write/close/clone/execve/connect │
+│  open/read/write/close/unlinkat/clone/execve │
+│  connect/socket/mmap                         │
 │              ↓ kprobe                   │
 │   ┌─────────────────────────────────┐  │
 │   │  eBPF Program (kernel space)    │  │
@@ -61,9 +65,11 @@ Generate a syscall dataset from Android applications to enable:
 
 ### Filtering
 - Self-PID filtering to prevent infinite loops
+- UID-based filtering for per-app tracing (`-u UID` option)
 - Path-based filtering (/proc, /sys, /dev/urandom)
 - Rate limiting for unknown file descriptors (3 events per FD)
-- stdin/stdout/stderr exclusion for read syscalls
+- stdin/stdout/stderr exclusion for read/write syscalls
+- Anonymous mmap filtering (only traces PROT_EXEC or file-backed mappings)
 
 ### FD Tracking
 - Maps file descriptors to paths via open/openat
@@ -97,7 +103,12 @@ make deploy
 # On Android emulator
 adb shell
 cd /data/local/tmp/syscall-harvester
+
+# Trace all processes
 ./syscall_harvester
+
+# Trace specific app by UID (per-app filtering)
+./syscall_harvester -u 10123
 ```
 
 ## Output Format
@@ -110,11 +121,14 @@ ts=10:30:45.123789012 syscall=close pid=5678 tid=5680 uid=10123 comm="RenderThre
 ts=10:30:45.124001234 syscall=clone pid=5678 tid=5678 uid=10123 comm="main" child_pid=5682 flags=0x1200011 type=process
 ts=10:30:45.124112345 syscall=execve pid=5682 tid=5682 uid=10123 comm="main" path="/system/bin/sh" argv=["/system/bin/sh", "-c", "ls"]
 ts=10:30:45.124223456 syscall=connect pid=5678 tid=5683 uid=10123 comm="OkHttp Dispatch" fd=15 family="ipv4" ip="142.250.185.206" port=443
+ts=10:30:45.124334567 syscall=socket pid=5678 tid=5683 uid=10123 comm="OkHttp Dispatch" fd=16 family="ipv4" type="tcp"
+ts=10:30:45.124445678 syscall=mmap pid=5678 tid=5680 uid=10123 comm="RenderThread" path="/data/app/librender.so" fd=12 prot="rx" flags="private"
+ts=10:30:45.124556789 syscall=unlinkat pid=5678 tid=5678 uid=10123 comm="main" path="/data/data/com.app/cache/tmp123" dirfd=-100 type="unlink"
 ```
 
 **Fields:**
 - `ts` - Timestamp (HH:MM:SS.nanoseconds)
-- `syscall` - Syscall name (open/openat/read/write/close/clone/execve/connect)
+- `syscall` - Syscall name (open/openat/read/write/close/unlinkat/clone/execve/connect/socket/mmap)
 - `pid` - Process ID (TGID - thread group ID)
 - `tid` - Thread ID (unique per thread, useful for multi-threaded component tracking)
 - `uid` - User ID (Android app identifier: 0=root, 1000-1999=system, 10000+=apps)
@@ -125,11 +139,13 @@ ts=10:30:45.124223456 syscall=connect pid=5678 tid=5683 uid=10123 comm="OkHttp D
 - `count` - Bytes requested (read/write only)
 - `actual` - Bytes actually read/written (read/write only)
 - `child_pid` - Child process ID (clone only)
-- `type` - Process creation type: process/thread/lightweight_process (clone only)
+- `type` - Process creation type: process/thread/lightweight_process (clone only), or unlink/rmdir (unlinkat only)
 - `argv` - Command-line arguments as JSON array, up to 5 args (execve only)
-- `family` - Address family: "ipv4" or "ipv6" (connect only)
+- `family` - Address family: "ipv4", "ipv6", or "unix" (connect/socket only)
 - `ip` - Destination IP address (connect only)
 - `port` - Destination port number (connect only)
+- `prot` - Memory protection: r/w/x combinations or NONE (mmap only)
+- `dirfd` - Directory file descriptor for relative paths (unlinkat only)
 
 ## Project Structure
 
@@ -141,9 +157,10 @@ android-syscall-harvester/
 │   ├── bpf/
 │   │   ├── bpf_maps.h              # BPF map definitions
 │   │   ├── bpf_utils.h             # Utilities & filters (init_event, filtering)
-│   │   ├── file_syscalls.bpf.c    # File I/O handlers (open/read/write/close)
+│   │   ├── file_syscalls.bpf.c    # File I/O handlers (open/read/write/close/unlinkat)
 │   │   ├── process_syscalls.bpf.c # Process lifecycle handlers (clone/execve)
-│   │   └── network_syscalls.bpf.c # Network handlers (connect)
+│   │   ├── network_syscalls.bpf.c # Network handlers (connect/socket)
+│   │   └── memory_syscalls.bpf.c  # Memory handlers (mmap)
 │   └── userspace/
 │       ├── bpf_loader.{c,h}        # BPF loading & management
 │       ├── output.{c,h}            # Event formatting (tid/comm output)

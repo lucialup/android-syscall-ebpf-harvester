@@ -282,7 +282,7 @@ int trace_read(struct pt_regs *ctx)
 
 /*
  * Kretprobe for read syscall - return point
- * Capturesac atual bytes read
+ * Captures actual bytes read
  */
 SEC("kretprobe/__x64_sys_read")
 int trace_read_ret(struct pt_regs *ctx)
