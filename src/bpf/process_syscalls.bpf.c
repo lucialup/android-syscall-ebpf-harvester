@@ -30,7 +30,8 @@ int trace_clone(struct pt_regs *ctx)
 		return 0;
 
 	regs = (struct pt_regs *)PT_REGS_PARM1(ctx);
-	bpf_probe_read(&clone_flags, sizeof(clone_flags), &PT_REGS_PARM1(regs));
+	if (bpf_probe_read(&clone_flags, sizeof(clone_flags), &PT_REGS_PARM1(regs)) < 0)
+		return 0;
 
 	init_event(&event, pid, tid, SYSCALL_CLONE);
 	event.flags = clone_flags;
@@ -112,19 +113,22 @@ int trace_execve(struct pt_regs *ctx)
 
 	regs = (struct pt_regs *)PT_REGS_PARM1(ctx);
 
-	bpf_probe_read(&filename, sizeof(filename), &PT_REGS_PARM1(regs));
+	if (bpf_probe_read(&filename, sizeof(filename), &PT_REGS_PARM1(regs)) < 0)
+		return 0;
 
 	init_event(&event, pid, tid, SYSCALL_EXECVE);
 	event.fd = 0;
 	event.flags = 0;
 	event.actual_count = 0;
 
-	bpf_probe_read_user_str(&event.filename, EXECVE_PATH_MAX, filename);
+	if (bpf_probe_read_user_str(&event.filename, EXECVE_PATH_MAX, filename) < 0)
+		return 0;
 
 	if (should_filter_file(event.filename))
 		return 0;
 
-	bpf_probe_read(&argv, sizeof(argv), &PT_REGS_PARM2(regs));
+	if (bpf_probe_read(&argv, sizeof(argv), &PT_REGS_PARM2(regs)) < 0)
+		return 0;
 
 	event.filename[EXECVE_SEPARATOR_OFFSET] = ' ';
 	event.filename[EXECVE_SEPARATOR_OFFSET + 1] = '|';

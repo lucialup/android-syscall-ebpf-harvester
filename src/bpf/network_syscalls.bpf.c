@@ -55,13 +55,16 @@ int trace_connect(struct pt_regs *ctx)
 		return 0;
 
 	regs = (struct pt_regs *)PT_REGS_PARM1(ctx);
-	bpf_probe_read(&sockfd, sizeof(sockfd), &PT_REGS_PARM1(regs));
-	bpf_probe_read(&addr_ptr, sizeof(addr_ptr), &PT_REGS_PARM2(regs));
+	if (bpf_probe_read(&sockfd, sizeof(sockfd), &PT_REGS_PARM1(regs)) < 0)
+		return 0;
+	if (bpf_probe_read(&addr_ptr, sizeof(addr_ptr), &PT_REGS_PARM2(regs)) < 0)
+		return 0;
 
 	if (!addr_ptr)
 		return 0;
 
-	bpf_probe_read_user(&family, sizeof(family), addr_ptr);
+	if (bpf_probe_read_user(&family, sizeof(family), addr_ptr) < 0)
+		return 0;
 
 	init_event(&event, pid, tid, SYSCALL_CONNECT);
 	event.fd = sockfd;
@@ -134,8 +137,10 @@ int trace_socket(struct pt_regs *ctx)
 		return 0;
 
 	regs = (struct pt_regs *)PT_REGS_PARM1(ctx);
-	bpf_probe_read(&domain, sizeof(domain), &PT_REGS_PARM1(regs));
-	bpf_probe_read(&type, sizeof(type), &PT_REGS_PARM2(regs));
+	if (bpf_probe_read(&domain, sizeof(domain), &PT_REGS_PARM1(regs)) < 0)
+		return 0;
+	if (bpf_probe_read(&type, sizeof(type), &PT_REGS_PARM2(regs)) < 0)
+		return 0;
 
 	if (domain != AF_INET && domain != AF_INET6 && domain != AF_UNIX)
 		return 0;

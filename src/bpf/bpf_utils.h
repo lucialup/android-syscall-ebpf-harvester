@@ -5,15 +5,15 @@
 #include <bpf/bpf_helpers.h>
 #include "bpf_maps.h"
 
-/*
-Character-by-character comparison for BPF verifier compatibility
- */
 static __always_inline int starts_with(const char *str, const char *prefix, int prefix_len)
 {
-	for (int i = 0; i < prefix_len && i < 255; i++) {
-		if (str[i] != prefix[i])
-			return 0;
+	#pragma unroll
+	for (int i = 0; i < prefix_len; i++) {
+		if (i >= MAX_PATH_LEN)
+			break;
 		if (str[i] == '\0')
+			return 0;
+		if (str[i] != prefix[i])
 			return 0;
 	}
 	return 1;

@@ -33,8 +33,10 @@ int trace_openat(struct pt_regs *ctx)
 
 	regs = (struct pt_regs *)PT_REGS_PARM1(ctx);
 
-	bpf_probe_read(&filename, sizeof(filename), &PT_REGS_PARM2(regs));
-	bpf_probe_read(&event.flags, sizeof(event.flags), &PT_REGS_PARM3(regs));
+	if (bpf_probe_read(&filename, sizeof(filename), &PT_REGS_PARM2(regs)) < 0)
+		return 0;
+	if (bpf_probe_read(&event.flags, sizeof(event.flags), &PT_REGS_PARM3(regs)) < 0)
+		return 0;
 
 	init_event(&event, pid, tid, SYSCALL_OPENAT);
 	event.fd = -1;
@@ -74,10 +76,11 @@ int trace_openat_ret(struct pt_regs *ctx)
 
 	event->fd = fd;
 
-	/* Store fd -> path mapping for later use by read/write/close */
 	fdk.pid = pid;
 	fdk.fd = fd;
-	bpf_map_update_elem(&fd_to_path, &fdk, event->filename, BPF_ANY);
+	if (bpf_map_update_elem(&fd_to_path, &fdk, event->filename, BPF_NOEXIST) != 0) {
+		bpf_map_update_elem(&fd_to_path, &fdk, event->filename, BPF_ANY);
+	}
 
 	bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
 			      event, sizeof(*event));
@@ -110,8 +113,10 @@ int trace_open(struct pt_regs *ctx)
 
 	regs = (struct pt_regs *)PT_REGS_PARM1(ctx);
 
-	bpf_probe_read(&filename, sizeof(filename), &PT_REGS_PARM1(regs));
-	bpf_probe_read(&event.flags, sizeof(event.flags), &PT_REGS_PARM2(regs));
+	if (bpf_probe_read(&filename, sizeof(filename), &PT_REGS_PARM1(regs)) < 0)
+		return 0;
+	if (bpf_probe_read(&event.flags, sizeof(event.flags), &PT_REGS_PARM2(regs)) < 0)
+		return 0;
 
 	init_event(&event, pid, tid, SYSCALL_OPEN);
 	event.fd = -1;
@@ -153,7 +158,9 @@ int trace_open_ret(struct pt_regs *ctx)
 
 	fdk.pid = pid;
 	fdk.fd = fd;
-	bpf_map_update_elem(&fd_to_path, &fdk, event->filename, BPF_ANY);
+	if (bpf_map_update_elem(&fd_to_path, &fdk, event->filename, BPF_NOEXIST) != 0) {
+		bpf_map_update_elem(&fd_to_path, &fdk, event->filename, BPF_ANY);
+	}
 
 	bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
 			      event, sizeof(*event));
@@ -186,7 +193,8 @@ int trace_close(struct pt_regs *ctx)
 		return 0;
 
 	regs = (struct pt_regs *)PT_REGS_PARM1(ctx);
-	bpf_probe_read(&fd, sizeof(fd), &PT_REGS_PARM1(regs));
+	if (bpf_probe_read(&fd, sizeof(fd), &PT_REGS_PARM1(regs)) < 0)
+		return 0;
 
 	fdk.pid = pid;
 	fdk.fd = fd;
@@ -239,10 +247,11 @@ int trace_read(struct pt_regs *ctx)
 
 	regs = (struct pt_regs *)PT_REGS_PARM1(ctx);
 
-	bpf_probe_read(&fd, sizeof(fd), &PT_REGS_PARM1(regs));
-	bpf_probe_read(&count, sizeof(count), &PT_REGS_PARM3(regs));
+	if (bpf_probe_read(&fd, sizeof(fd), &PT_REGS_PARM1(regs)) < 0)
+		return 0;
+	if (bpf_probe_read(&count, sizeof(count), &PT_REGS_PARM3(regs)) < 0)
+		return 0;
 
-	/* Filter stdin/stdout/stderr to avoid console spam */
 	if (fd <= 2)
 		return 0;
 
@@ -339,8 +348,10 @@ int trace_write(struct pt_regs *ctx)
 
 	regs = (struct pt_regs *)PT_REGS_PARM1(ctx);
 
-	bpf_probe_read(&fd, sizeof(fd), &PT_REGS_PARM1(regs));
-	bpf_probe_read(&count, sizeof(count), &PT_REGS_PARM3(regs));
+	if (bpf_probe_read(&fd, sizeof(fd), &PT_REGS_PARM1(regs)) < 0)
+		return 0;
+	if (bpf_probe_read(&count, sizeof(count), &PT_REGS_PARM3(regs)) < 0)
+		return 0;
 
 	if (fd <= 2)
 		return 0;
@@ -433,15 +444,20 @@ int trace_unlinkat(struct pt_regs *ctx)
 
 	regs = (struct pt_regs *)PT_REGS_PARM1(ctx);
 
-	bpf_probe_read(&dirfd, sizeof(dirfd), &PT_REGS_PARM1(regs));
-	bpf_probe_read(&pathname, sizeof(pathname), &PT_REGS_PARM2(regs));
-	bpf_probe_read(&flags, sizeof(flags), &PT_REGS_PARM3(regs));
+	if (bpf_probe_read(&dirfd, sizeof(dirfd), &PT_REGS_PARM1(regs)) < 0)
+		return 0;
+	if (bpf_probe_read(&pathname, sizeof(pathname), &PT_REGS_PARM2(regs)) < 0)
+		return 0;
+	if (bpf_probe_read(&flags, sizeof(flags), &PT_REGS_PARM3(regs)) < 0)
+		return 0;
 
 	init_event(&event, pid, tid, SYSCALL_UNLINKAT);
 	event.fd = dirfd;
 	event.flags = flags;
 
-	bpf_probe_read_user_str(&event.filename, sizeof(event.filename), pathname);
+	if (bpf_probe_read_user_str(&event.filename, sizeof(event.filename) - 1, pathname) < 0)
+		return 0;
+	event.filename[sizeof(event.filename) - 1] = '\0';
 
 	if (should_filter_file(event.filename))
 		return 0;
